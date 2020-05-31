@@ -44,34 +44,91 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
 
     private static final InternalLogger logger = InternalLoggerFactory.getInstance(AbstractChannel.class);
 
+    /**
+     * 父通道
+     */
     private final Channel parent;
+
+    /**
+     * 通道唯一标识id
+     */
     private final ChannelId id;
+
+    /**
+     * 不安全的操作，Netty框架内部使用
+     */
     private final Unsafe unsafe;
+
+    /**
+     * 缺省通道管道
+     */
     private final DefaultChannelPipeline pipeline;
+
+    /**
+     * 空的通道异步回调，不安全不稳定的API
+     */
     private final VoidChannelPromise unsafeVoidPromise = new VoidChannelPromise(this, false);
+
+    /**
+     * 关闭通道的异步回调
+     */
     private final CloseFuture closeFuture = new CloseFuture(this);
 
+    /**
+     * 本地主机地址
+     */
     private volatile SocketAddress localAddress;
+
+    /**
+     * 远程主机地址
+     */
     private volatile SocketAddress remoteAddress;
+
+    /**
+     * 事件循环（线程池）
+     */
     private volatile EventLoop eventLoop;
+
+    /**
+     * 通道注册状态
+     */
     private volatile boolean registered;
+
+    /**
+     * 是否已开始关闭通道?
+     */
     private boolean closeInitiated;
+
+    /**
+     * 开始关闭异常原因?
+     */
     private Throwable initialCloseCause;
 
+    /**
+     * 通道的字符串标识
+     */
     /** Cache for the string representation of this channel */
     private boolean strValActive;
     private String strVal;
 
     /**
+     * 创建一个新的AbstractChannel实例，父通道parent可以为空
      * Creates a new instance.
      *
      * @param parent
      *        the parent of this channel. {@code null} if there's no parent.
      */
     protected AbstractChannel(Channel parent) {
+        // 初始化父通道parent
         this.parent = parent;
+
+        // 初始化通道id
         id = newId();
+
+        // 初始化Netty封装的不安全操作：抽象模板方法
         unsafe = newUnsafe();
+
+        // 初始化通道管道
         pipeline = newChannelPipeline();
     }
 
@@ -94,6 +151,8 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
     }
 
     /**
+     * 创建一个新的通道id实例
+     *
      * Returns a new {@link DefaultChannelId} instance. Subclasses may override this method to assign custom
      * {@link ChannelId}s to {@link Channel}s that use the {@link AbstractChannel#AbstractChannel(Channel)} constructor.
      */
@@ -102,6 +161,8 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
     }
 
     /**
+     * 创建一个新的缺省通道管道
+     *
      * Returns a new {@link DefaultChannelPipeline} instance.
      */
     protected DefaultChannelPipeline newChannelPipeline() {
@@ -243,8 +304,16 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
         return this;
     }
 
+    /**
+     * 绑定通道管理和本地主机地址
+     *
+     * @param localAddress 本地主机地址
+     * @param promise 绑定操作异步回调promise
+     * @return
+     */
     @Override
     public ChannelFuture bind(SocketAddress localAddress, ChannelPromise promise) {
+        // pipeline绑定本机地址
         return pipeline.bind(localAddress, promise);
     }
 
@@ -412,6 +481,8 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
     }
 
     /**
+     * AbstractUnsafe抽象类
+     *
      * {@link Unsafe} implementation which sub-classes must extend and use.
      */
     protected abstract class AbstractUnsafe implements Unsafe {
@@ -449,6 +520,12 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
             return remoteAddress0();
         }
 
+        /**
+         * 将通道Channel关联EventLoop以及注册到EventLoop关联的Selector中
+         *
+         * @param eventLoop
+         * @param promise
+         */
         @Override
         public final void register(EventLoop eventLoop, final ChannelPromise promise) {
             ObjectUtil.checkNotNull(eventLoop, "eventLoop");
@@ -462,15 +539,21 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                 return;
             }
 
+            // 赋值当前实例的eventLoop
             AbstractChannel.this.eventLoop = eventLoop;
 
+            // 如果当前线程和eventLoop中的线程在同一个线程中
             if (eventLoop.inEventLoop()) {
+                // 在当前线程执行注册
                 register0(promise);
-            } else {
+            }
+            else {
+                // 不在同一个线程，提交一个任务给线程池执行注册
                 try {
                     eventLoop.execute(new Runnable() {
                         @Override
                         public void run() {
+                            // 执行注册
                             register0(promise);
                         }
                     });
@@ -485,6 +568,15 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
             }
         }
 
+        /**
+         * 执行通道注册任务
+         *
+         * 注册完成，将触发通道已注册事件channelRegistered，已经添加到pipeline且监听注册事件的处理器将会被调用，
+         * 比如{@link ChannelInitializer}子类或匿名子类，此时将会触发{@link ChannelInitializer#channelRegistered(ChannelHandlerContext)}方法，
+         * 将执行{@link ChannelInitializer}子类或匿名子类的initChannel(C ch)方法，将真正的业务逻辑处理器添加添加到pipeline中
+         *
+         * @param promise
+         */
         private void register0(ChannelPromise promise) {
             try {
                 // check if the channel is still open as it could be closed in the mean time when the register
@@ -493,26 +585,46 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                     return;
                 }
                 boolean firstRegistration = neverRegistered;
+
+                logger.debug("================> 调用doRegister()...");
+                // 注册：将channel注册到selector中
                 doRegister();
+
                 neverRegistered = false;
                 registered = true;
 
+                // 确保我们在通知对应的事件回调promise之前调用handlerAdded(...)。
+                // 这是有必要的，因为用户可能已经通过通道事件监听器中的pipeline触发了事件。
                 // Ensure we call handlerAdded(...) before we actually notify the promise. This is needed as the
                 // user may already fire events through the pipeline in the ChannelFutureListener.
+                // 触发handlerAdded事件，调用初始化器/处理器的handlerAdded方法，确所有业务逻辑处理器添加到pipeline中
+                logger.debug("================> 调用pipeline.invokeHandlerAddedIfNeeded()...");
                 pipeline.invokeHandlerAddedIfNeeded();
 
+                logger.debug("================> 调用safeSetSuccess(promise)...");
                 safeSetSuccess(promise);
+
+                // 触发注册成功事件
+                // 在上面的pipeline.invokeHandlerAddedIfNeeded()方法中，部分通道处理器上下文会被移除，所以不会被触发
+                logger.debug("================> 调用pipeline.fireChannelRegistered()...");
                 pipeline.fireChannelRegistered();
+
+                // 只触发通道激活事件channelActive，如果通道channel还没被注册的话。如果通道被取消注册或重新注册，这样可以防止触发多个通道的激活事件。
+                // 即这样做，可以避免在通道取消注册或重新注册时造成多个通道（重复）激活。
                 // Only fire a channelActive if the channel has never been registered. This prevents firing
                 // multiple channel actives if the channel is deregistered and re-registered.
+                logger.debug("================> 调用isActive()...");
                 if (isActive()) {
                     if (firstRegistration) {
+                        // 首次触发激活事件
+                        logger.debug("================> 调用pipeline.fireChannelActive()...");
                         pipeline.fireChannelActive();
                     } else if (config().isAutoRead()) {
                         // This channel was registered before and autoRead() is set. This means we need to begin read
                         // again so that we process inbound data.
                         //
                         // See https://github.com/netty/netty/issues/4805
+                        logger.debug("================> 调用beginRead()监听可读事件...");
                         beginRead();
                     }
                 }
@@ -524,6 +636,12 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
             }
         }
 
+        /**
+         * 绑定本地主机
+         *
+         * @param localAddress
+         * @param promise
+         */
         @Override
         public final void bind(final SocketAddress localAddress, final ChannelPromise promise) {
             assertEventLoop();
@@ -554,7 +672,9 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                 return;
             }
 
+            // 绑定成功,触发channelActive事件
             if (!wasActive && isActive()) {
+                // 创建一个稍后调用的任务
                 invokeLater(new Runnable() {
                     @Override
                     public void run() {
@@ -831,6 +951,9 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
             });
         }
 
+        /**
+         * 监听可读事件
+         */
         @Override
         public final void beginRead() {
             assertEventLoop();
@@ -840,8 +963,10 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
             }
 
             try {
+                // 监听可读事件
                 doBeginRead();
             } catch (final Exception e) {
+                // 发生异常，触发异常事件
                 invokeLater(new Runnable() {
                     @Override
                     public void run() {

@@ -1127,6 +1127,15 @@ public abstract class AbstractByteBuf extends ByteBuf {
         return writtenBytes;
     }
 
+    /**
+     * 从对应的channel中将指定长度数据到byteBuf中
+     *
+     * @param in
+     * @param length the maximum number of bytes to transfer
+     *
+     * @return
+     * @throws IOException
+     */
     @Override
     public int writeBytes(ScatteringByteChannel in, int length) throws IOException {
         ensureWritable(length);

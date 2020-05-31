@@ -32,6 +32,11 @@ import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 import static io.netty.util.internal.ObjectUtil.checkNotNull;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
+/**
+ * 缺省的Promise
+ *
+ * @param <V>
+ */
 public class DefaultPromise<V> extends AbstractFuture<V> implements Promise<V> {
     private static final InternalLogger logger = InternalLoggerFactory.getInstance(DefaultPromise.class);
     private static final InternalLogger rejectedExecutionLogger =
@@ -91,6 +96,12 @@ public class DefaultPromise<V> extends AbstractFuture<V> implements Promise<V> {
         executor = null;
     }
 
+    /**
+     * 触发Promise成功与否
+     *
+     * @param result 结果
+     * @return
+     */
     @Override
     public Promise<V> setSuccess(V result) {
         if (setSuccess0(result)) {
@@ -600,6 +611,12 @@ public class DefaultPromise<V> extends AbstractFuture<V> implements Promise<V> {
         }
     }
 
+    /**
+     * 设置调用成功状态
+     *
+     * @param result
+     * @return
+     */
     private boolean setSuccess0(V result) {
         return setValue0(result == null ? SUCCESS : result);
     }
@@ -608,6 +625,11 @@ public class DefaultPromise<V> extends AbstractFuture<V> implements Promise<V> {
         return setValue0(new CauseHolder(checkNotNull(cause, "cause")));
     }
 
+    /**
+     *
+     * @param objResult
+     * @return
+     */
     private boolean setValue0(Object objResult) {
         if (RESULT_UPDATER.compareAndSet(this, null, objResult) ||
             RESULT_UPDATER.compareAndSet(this, UNCANCELLABLE, objResult)) {

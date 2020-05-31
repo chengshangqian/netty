@@ -25,8 +25,17 @@ final class DefaultSelectStrategy implements SelectStrategy {
 
     private DefaultSelectStrategy() { }
 
+    /**
+     * 计算选择策略
+     *
+     * @param selectSupplier The supplier with the result of a select result.
+     * @param hasTasks true if tasks are waiting to be processed.
+     * @return
+     * @throws Exception
+     */
     @Override
     public int calculateStrategy(IntSupplier selectSupplier, boolean hasTasks) throws Exception {
+        // 如有任务，则执行事件的非阻塞选择，查看是否有感兴趣的事件产生，否则继续阻塞选择
         return hasTasks ? selectSupplier.get() : SelectStrategy.SELECT;
     }
 }

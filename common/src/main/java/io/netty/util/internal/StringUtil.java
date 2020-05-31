@@ -300,15 +300,25 @@ public final class StringUtil {
     }
 
     /**
+     * 从一个类型{@link Class}中产生一个简化的名字，类似{@link Class#getSimpleName()}，但可以很好的兼容匿名类
+     *
      * Generates a simplified name from a {@link Class}.  Similar to {@link Class#getSimpleName()}, but it works fine
      * with anonymous classes.
      */
     public static String simpleClassName(Class<?> clazz) {
+
+        // 空指针检查没问题，获取类型的完整类名
         String className = checkNotNull(clazz, "clazz").getName();
+
+        // 最后一个.的索引，将用于截取简单类名，从而实现支持匿名类
         final int lastDotIdx = className.lastIndexOf(PACKAGE_SEPARATOR_CHAR);
+
+        // 如果存在.，说名类至少在一个package包下，去掉包路径，返回完整类名取出包路径，返回包含简单类名及之后的字符串
         if (lastDotIdx > -1) {
             return className.substring(lastDotIdx + 1);
         }
+
+        // 在根目录的类，不存在包
         return className;
     }
 

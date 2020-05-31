@@ -20,15 +20,33 @@ import io.netty.util.internal.ObjectUtil;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ThreadFactory;
 
+/**
+ * 线程执行器：每个任务分配一个线程
+ */
 public final class ThreadPerTaskExecutor implements Executor {
+    /**
+     * 线程工厂
+     */
     private final ThreadFactory threadFactory;
 
+    /**
+     * 指定线程工厂，创建一个ThreadPerTaskExecutor实例
+     *
+     * @param threadFactory 线程工厂
+     */
     public ThreadPerTaskExecutor(ThreadFactory threadFactory) {
+        // 指定的线程不能为null，否则抛出空指针异常NullPointerException
         this.threadFactory = ObjectUtil.checkNotNull(threadFactory, "threadFactory");
     }
 
+    /**
+     * 执行任务：为每个任务创建一个线程并开始执行
+     *
+     * @param command 任务/命令
+     */
     @Override
     public void execute(Runnable command) {
+        // 使用线程工厂分配一个新/空闲的线程并开始执行任务
         threadFactory.newThread(command).start();
     }
 }

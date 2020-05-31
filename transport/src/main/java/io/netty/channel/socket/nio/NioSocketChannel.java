@@ -52,29 +52,52 @@ import java.util.concurrent.Executor;
 import static io.netty.channel.internal.ChannelUtils.MAX_BYTES_PER_GATHERING_WRITE_ATTEMPTED_LOW_THRESHOLD;
 
 /**
+ * 非阻塞IO的套接字通道类，它是使用基于NIO Selector的套接字通道{@link io.netty.channel.socket.SocketChannel}的实现
+ *
  * {@link io.netty.channel.socket.SocketChannel} which uses NIO selector based implementation.
  */
 public class NioSocketChannel extends AbstractNioByteChannel implements io.netty.channel.socket.SocketChannel {
+    /**
+     * 内部日志类
+     */
     private static final InternalLogger logger = InternalLoggerFactory.getInstance(NioSocketChannel.class);
+
+    /**
+     * 缺省选择器提供者：windows平台下是WindowsSelectorProvider实例
+     */
     private static final SelectorProvider DEFAULT_SELECTOR_PROVIDER = SelectorProvider.provider();
 
+    /**
+     * 使用给定的选择器提供者创建/打开一个套接字通道
+     *
+     * @param provider 选择器提供者
+     * @return 返回套接字通道
+     */
     private static SocketChannel newSocket(SelectorProvider provider) {
         try {
             /**
+             * 使用给定的选择器提供者{@link SelectorProvider}打开套接字通道{@link SocketChannel}，并且移除了{@link SelectorProvider#provider()}的条件
              *  Use the {@link SelectorProvider} to open {@link SocketChannel} and so remove condition in
              *  {@link SelectorProvider#provider()} which is called by each SocketChannel.open() otherwise.
              *
              *  See <a href="https://github.com/netty/netty/issues/2308">#2308</a>.
              */
+
+            // 返回JAVA NIO原生的套接字通道SocketChannel
             return provider.openSocketChannel();
         } catch (IOException e) {
             throw new ChannelException("Failed to open a socket.", e);
         }
     }
 
+    /**
+     * 套接字通道配置
+     */
     private final SocketChannelConfig config;
 
     /**
+     * 使用缺省选择器提供者创建一个新的NioSocketChannel实例
+     *
      * Create a new instance
      */
     public NioSocketChannel() {
@@ -82,27 +105,41 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
     }
 
     /**
+     * 使用给定的选择器提供者创建NioSocketChannel实例
+     *
      * Create a new instance using the given {@link SelectorProvider}.
+     *
+     * @param provider 选择器提供者
      */
     public NioSocketChannel(SelectorProvider provider) {
+        // 使用选择器提供者打开一个套接字通道
         this(newSocket(provider));
     }
 
     /**
+     * 使用给定的JAVA NIO原始套接字通道创建一个新的NioSocketChannel实例
+     *
      * Create a new instance using the given {@link SocketChannel}.
+     * @param socket JAVA NIO原始套接字通道
      */
     public NioSocketChannel(SocketChannel socket) {
         this(null, socket);
     }
 
     /**
+     * 创建一个新的NioSocketChannel实例
+     *
      * Create a new instance
      *
      * @param parent    the {@link Channel} which created this instance or {@code null} if it was created by the user
      * @param socket    the {@link SocketChannel} which will be used
      */
     public NioSocketChannel(Channel parent, SocketChannel socket) {
+        // 调用父类构造函数，开始指定感兴趣的NIO选择器事件：读取事件
         super(parent, socket);
+
+        // 初始化套接字通道配置config
+        // 调用JAVA NIO的套接字通道获取Java原生套接字对象，然后封装到套接字通道配置中
         config = new NioSocketChannelConfig(this, socket.socket());
     }
 
@@ -116,11 +153,21 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
         return config;
     }
 
+    /**
+     * 返回Java NIO原生套接字通道SocketChannel
+     *
+     * @return
+     */
     @Override
     protected SocketChannel javaChannel() {
         return (SocketChannel) super.javaChannel();
     }
 
+    /**
+     * 是否已经打开套接字并且已经连接上远程主机
+     *
+     * @return
+     */
     @Override
     public boolean isActive() {
         SocketChannel ch = javaChannel();
@@ -296,6 +343,12 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
         doBind0(localAddress);
     }
 
+    /**
+     * 为套接字通道绑定本机地址
+     *
+     * @param localAddress
+     * @throws Exception
+     */
     private void doBind0(SocketAddress localAddress) throws Exception {
         if (PlatformDependent.javaVersion() >= 7) {
             SocketUtils.bind(javaChannel(), localAddress);
@@ -304,22 +357,43 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
         }
     }
 
+    /**
+     * 绑定本地通信地址，然后发起连接请求，连接远程主机
+     *
+     * @param remoteAddress 远程主机地址
+     * @param localAddress 本地主机地址，可以为{@code null}
+     * @return 返回连接结果，可能为true，也可能为false,如果是false，代表还在连接当中
+     * @throws Exception 连接失败或不成功将抛出异常
+     */
     @Override
     protected boolean doConnect(SocketAddress remoteAddress, SocketAddress localAddress) throws Exception {
+        // 为套接字管道绑定本地主机地址
         if (localAddress != null) {
             doBind0(localAddress);
         }
 
+        // 连接请求执行状态
         boolean success = false;
+
         try {
+            // （异步）连接远程主机，立即返回连接结果，可能已经连接上(true)，也可能连接中(false)，连接不上将抛出异常
             boolean connected = SocketUtils.connect(javaChannel(), remoteAddress);
+
+            // 如果没有立即收到连接成功的结果（connected为false，不表示连接失败，可能正在连接中，需要等待响应时间）
             if (!connected) {
+                // (因为）连接请求已经发出，（所以）注册感兴趣的事件OP_CONNECT，一旦连接上，会触发连接成功事件
                 selectionKey().interestOps(SelectionKey.OP_CONNECT);
             }
+
+            // 连接请求顺利执行
             success = true;
+
+            // 返回[本次或此刻]的连接状态
             return connected;
         } finally {
+            // 如果连接操作没有顺利执行即连接出现异常连接失败
             if (!success) {
+                // 关闭通道即相关资源
                 doClose();
             }
         }
@@ -337,16 +411,29 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
         doClose();
     }
 
+    /**
+     * 关闭通道以及相关资源
+     *
+     * @throws Exception
+     */
     @Override
     protected void doClose() throws Exception {
         super.doClose();
         javaChannel().close();
     }
 
+    /**
+     * 读取通道中的缓冲数据
+     *
+     * @param byteBuf
+     * @return
+     * @throws Exception
+     */
     @Override
     protected int doReadBytes(ByteBuf byteBuf) throws Exception {
         final RecvByteBufAllocator.Handle allocHandle = unsafe().recvBufAllocHandle();
         allocHandle.attemptedBytesRead(byteBuf.writableBytes());
+        // 从对应的channel中将指定长度数据到byteBuf中
         return byteBuf.writeBytes(javaChannel(), allocHandle.attemptedBytesRead());
     }
 
@@ -438,11 +525,19 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
         incompleteWrite(writeSpinCount < 0);
     }
 
+    /**
+     * 初始化不安全的操作：即java底层对于socket套接字的操作
+     *
+     * @return
+     */
     @Override
     protected AbstractNioUnsafe newUnsafe() {
         return new NioSocketChannelUnsafe();
     }
 
+    /**
+     * 初始化NioSocketChannelUnsafe：主要JAVA底层SOCKET套接字相关的I/O等本地相关的操作
+     */
     private final class NioSocketChannelUnsafe extends NioByteUnsafe {
         @Override
         protected Executor prepareToClose() {
@@ -466,8 +561,18 @@ public class NioSocketChannel extends AbstractNioByteChannel implements io.netty
 
     private final class NioSocketChannelConfig extends DefaultSocketChannelConfig {
         private volatile int maxBytesPerGatheringWrite = Integer.MAX_VALUE;
+
+        /**
+         * 创建一个NioSocketChannelConfig实例
+         *
+         * @param channel 套接字通道
+         * @param javaSocket java套接字
+         */
         private NioSocketChannelConfig(NioSocketChannel channel, Socket javaSocket) {
+            // 调用父类构造方法，在父类构造方法中
             super(channel, javaSocket);
+
+            // 计算通道(?)可写的最大字节数
             calculateMaxBytesPerGatheringWrite();
         }
 

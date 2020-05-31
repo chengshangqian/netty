@@ -29,11 +29,14 @@ import java.util.List;
 public interface AddressResolver<T extends SocketAddress> extends Closeable {
 
   /**
+   * 当地址解析器支持解析指定地址时返回true
+   *
    * Returns {@code true} if and only if the specified address is supported by this resolved.
    */
   boolean isSupported(SocketAddress address);
 
   /**
+   * 如果该地址已经被当前地址解析器解析过时返回true，如果不支持该地址，将抛出异常
    * Returns {@code true} if and only if the specified address has been resolved.
    *
    * @throws UnsupportedAddressTypeException if the specified address is not supported by this resolver

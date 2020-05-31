@@ -40,17 +40,36 @@ import java.util.List;
 import java.util.Map;
 
 /**
+ * 非阻塞服务端套接字通道
+ * 基于NIO selector实现，用于接收新的客户端连接
+ *
  * A {@link io.netty.channel.socket.ServerSocketChannel} implementation which uses
  * NIO selector based implementation to accept new connections.
  */
 public class NioServerSocketChannel extends AbstractNioMessageChannel
                              implements io.netty.channel.socket.ServerSocketChannel {
 
+    /**
+     * 通道元数据
+     */
     private static final ChannelMetadata METADATA = new ChannelMetadata(false, 16);
+
+    /**
+     * 缺省选择器提供者
+     */
     private static final SelectorProvider DEFAULT_SELECTOR_PROVIDER = SelectorProvider.provider();
 
+    /**
+     * 内部日志
+     */
     private static final InternalLogger logger = InternalLoggerFactory.getInstance(NioServerSocketChannel.class);
 
+    /**
+     * 使用指定的选择器提供者创建一个新的服务端套接字通道
+     *
+     * @param provider
+     * @return
+     */
     private static ServerSocketChannel newSocket(SelectorProvider provider) {
         try {
             /**
@@ -69,6 +88,8 @@ public class NioServerSocketChannel extends AbstractNioMessageChannel
     private final ServerSocketChannelConfig config;
 
     /**
+     * 创建一个服务端套接字通道实例
+     *
      * Create a new instance
      */
     public NioServerSocketChannel() {
@@ -76,6 +97,8 @@ public class NioServerSocketChannel extends AbstractNioMessageChannel
     }
 
     /**
+     * 创建一个服务端套接字通道实例
+     *
      * Create a new instance using the given {@link SelectorProvider}.
      */
     public NioServerSocketChannel(SelectorProvider provider) {
@@ -83,9 +106,12 @@ public class NioServerSocketChannel extends AbstractNioMessageChannel
     }
 
     /**
+     * 创建一个服务端套接字通道实例
+     *
      * Create a new instance using the given {@link ServerSocketChannel}.
      */
     public NioServerSocketChannel(ServerSocketChannel channel) {
+        // 调用父类构造方法，开始指定感兴趣的事件：接受客户端事件
         super(null, channel, SelectionKey.OP_ACCEPT);
         config = new NioServerSocketChannelConfig(this, javaChannel().socket());
     }
@@ -127,6 +153,12 @@ public class NioServerSocketChannel extends AbstractNioMessageChannel
         return SocketUtils.localSocketAddress(javaChannel().socket());
     }
 
+    /**
+     * 绑定本地主机地址
+     *
+     * @param localAddress
+     * @throws Exception
+     */
     @SuppressJava6Requirement(reason = "Usage guarded by java version check")
     @Override
     protected void doBind(SocketAddress localAddress) throws Exception {
@@ -142,10 +174,19 @@ public class NioServerSocketChannel extends AbstractNioMessageChannel
         javaChannel().close();
     }
 
+    /**
+     * 开始接受客户端请求，读读取消息
+     *
+     * @param buf
+     * @return
+     * @throws Exception
+     */
     @Override
     protected int doReadMessages(List<Object> buf) throws Exception {
+        // 接受客户端请求
         SocketChannel ch = SocketUtils.accept(javaChannel());
 
+        // 将客户端请求封装为NioSocketChannel实例，然后添加到中缓冲消息集合里面
         try {
             if (ch != null) {
                 buf.add(new NioSocketChannel(this, ch));
@@ -164,6 +205,7 @@ public class NioServerSocketChannel extends AbstractNioMessageChannel
         return 0;
     }
 
+    // 服务端时被连接的，所以和连接远程主机相关的方法没必要去填充(实现)
     // Unnecessary stuff
     @Override
     protected boolean doConnect(

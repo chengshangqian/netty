@@ -23,6 +23,11 @@ import io.netty.util.internal.UnstableApi;
 
 import java.util.concurrent.TimeUnit;
 
+/**
+ * 空的通道异步回调承诺
+ *
+ * 不稳定的API
+ */
 @UnstableApi
 public final class VoidChannelPromise extends AbstractFuture<Void> implements ChannelPromise {
 

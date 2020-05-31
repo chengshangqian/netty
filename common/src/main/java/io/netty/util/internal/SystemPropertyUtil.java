@@ -22,6 +22,8 @@ import java.security.AccessController;
 import java.security.PrivilegedAction;
 
 /**
+ * 系统属性实用类，检索和解析Java系统属性值的使用方法集和
+ *
  * A collection of utility methods to retrieve and parse the values of the Java system properties.
  */
 public final class SystemPropertyUtil {
@@ -29,6 +31,8 @@ public final class SystemPropertyUtil {
     private static final InternalLogger logger = InternalLoggerFactory.getInstance(SystemPropertyUtil.class);
 
     /**
+     * 是否包含指定key的系统属性值
+     *
      * Returns {@code true} if and only if the system property with the specified {@code key}
      * exists.
      */
@@ -37,16 +41,20 @@ public final class SystemPropertyUtil {
     }
 
     /**
+     * 返回指定key对应的Java系统属性值，如果属性访问失败，则返回null
+     *
      * Returns the value of the Java system property with the specified
      * {@code key}, while falling back to {@code null} if the property access fails.
      *
-     * @return the property value or {@code null}
+     * @return the property value or {@code null} 返回属性值或null
      */
     public static String get(String key) {
         return get(key, null);
     }
 
     /**
+     * 返回指定key对应的Java系统属性值，如果属性访问失败，则返回指定的默认值def
+     *
      * Returns the value of the Java system property with the specified
      * {@code key}, while falling back to the specified default value if
      * the property access fails.
@@ -56,13 +64,18 @@ public final class SystemPropertyUtil {
      *         specified property is not allowed.
      */
     public static String get(final String key, String def) {
+        // null检查，null将抛出空指针NullPointerException异常
         ObjectUtil.checkNotNull(key, "key");
+
+        // 空检查，抛出IllegalArgumentException异常
         if (key.isEmpty()) {
             throw new IllegalArgumentException("key must not be empty.");
         }
 
+        // 属性值
         String value = null;
         try {
+            // 获取系统属性值，可能有安全访问权限限制
             if (System.getSecurityManager() == null) {
                 value = System.getProperty(key);
             } else {
@@ -74,17 +87,22 @@ public final class SystemPropertyUtil {
                 });
             }
         } catch (SecurityException e) {
+            // 访问权限不足，无法检索到指定的系统属性值，打印警告信息
             logger.warn("Unable to retrieve a system property '{}'; default values will be used.", key, e);
         }
 
+        // 如果为空，返回给定的默认值def
         if (value == null) {
             return def;
         }
 
+        // 不为null，原样返回属性值
         return value;
     }
 
     /**
+     * 返回boolean型的系统属性值
+     *
      * Returns the value of the Java system property with the specified
      * {@code key}, while falling back to the specified default value if
      * the property access fails.
@@ -121,6 +139,10 @@ public final class SystemPropertyUtil {
     }
 
     /**
+     * 返回指定{@code key}的Java系统属性整数型值，如果系统属性访问失败(未设置或不允许访问/无权限即返回值null)，则返回给定的缺省值{@code def}
+     *
+     * falling back 返回/退回/落回/回落
+     *
      * Returns the value of the Java system property with the specified
      * {@code key}, while falling back to the specified default value if
      * the property access fails.
@@ -130,11 +152,15 @@ public final class SystemPropertyUtil {
      *         specified property is not allowed.
      */
     public static int getInt(String key, int def) {
+        // 从JVM中检索key对相应的系统属性
         String value = get(key);
+
+        // 如果为null，返回指定的默认值def
         if (value == null) {
             return def;
         }
 
+        // 如果不为空，去空格，然后解析为整数
         value = value.trim();
         try {
             return Integer.parseInt(value);
@@ -142,15 +168,19 @@ public final class SystemPropertyUtil {
             // Ignore
         }
 
+        // 如果解析出现异常，即配置的系统属性不符合整数类型或其它问题，打印警告信息
         logger.warn(
                 "Unable to parse the integer system property '{}':{} - using the default value: {}",
                 key, value, def
         );
 
+        // 打印警告信息后，返回默认值def
         return def;
     }
 
     /**
+     * 返回long型的系统属性值
+     *
      * Returns the value of the Java system property with the specified
      * {@code key}, while falling back to the specified default value if
      * the property access fails.

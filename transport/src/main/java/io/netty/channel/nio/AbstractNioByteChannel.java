@@ -57,12 +57,14 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
     private boolean inputClosedSeenErrorOnRead;
 
     /**
+     * 根据给定的父通道{@link Channel}和可选择通道{@link SelectableChannel}创建一个新的AbstractNioByteChannel实例
      * Create a new instance
      *
      * @param parent            the parent {@link Channel} by which this instance was created. May be {@code null}
      * @param ch                the underlying {@link SelectableChannel} on which it operates
      */
     protected AbstractNioByteChannel(Channel parent, SelectableChannel ch) {
+        // 调用父类构造方法，开始指定感兴趣的事件：读事件
         super(parent, ch, SelectionKey.OP_READ);
     }
 
@@ -128,6 +130,9 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
             }
         }
 
+        /**
+         * 处理可读事件：读出通道中的数据(缓冲数据）
+         */
         @Override
         public final void read() {
             final ChannelConfig config = config();
@@ -145,7 +150,10 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
             try {
                 do {
                     byteBuf = allocHandle.allocate(allocator);
+
+                    // 读取字节数据doReadBytes
                     allocHandle.lastBytesRead(doReadBytes(byteBuf));
+
                     if (allocHandle.lastBytesRead() <= 0) {
                         // nothing was read. release the buffer.
                         byteBuf.release();
@@ -160,11 +168,15 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
 
                     allocHandle.incMessagesRead(1);
                     readPending = false;
+
+                    // 触发读取事件
                     pipeline.fireChannelRead(byteBuf);
+
                     byteBuf = null;
                 } while (allocHandle.continueReading());
 
                 allocHandle.readComplete();
+                // 触发读取完成事件
                 pipeline.fireChannelReadComplete();
 
                 if (close) {

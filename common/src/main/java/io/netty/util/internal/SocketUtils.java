@@ -82,6 +82,14 @@ public final class SocketUtils {
         }
     }
 
+    /**
+     * （异步）连接远程主机
+     *
+     * @param socketChannel
+     * @param remoteAddress
+     * @return
+     * @throws IOException
+     */
     public static boolean connect(final SocketChannel socketChannel, final SocketAddress remoteAddress)
             throws IOException {
         try {

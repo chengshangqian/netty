@@ -59,6 +59,9 @@ public abstract class AbstractNioMessageChannel extends AbstractNioChannel {
 
         private final List<Object> readBuf = new ArrayList<Object>();
 
+        /**
+         * 处理可读事件或接受事件
+         */
         @Override
         public void read() {
             assert eventLoop().inEventLoop();
@@ -70,8 +73,10 @@ public abstract class AbstractNioMessageChannel extends AbstractNioChannel {
             boolean closed = false;
             Throwable exception = null;
             try {
+                // 开始读取数据
                 try {
                     do {
+                        // 创建一个子NioSocketChannel封装到readBuf，然后触发ServerBootstrapAdaptor处理器的事件处理方法
                         int localRead = doReadMessages(readBuf);
                         if (localRead == 0) {
                             break;
@@ -90,10 +95,14 @@ public abstract class AbstractNioMessageChannel extends AbstractNioChannel {
                 int size = readBuf.size();
                 for (int i = 0; i < size; i ++) {
                     readPending = false;
+                    // 触发读取事件：此时先触发ServerBootstrapAdaptor处理器上下文，
+                    // 然后ServerBootstrapAdaptor处理器上下文会把子封装的channel注册到工作线程的eventLoop的选择器上，然
+                    // 最后真正的业务逻辑处理器的事件进行响应或进行相关处理：而客户端的子channel的read方法将真正的读取数据
                     pipeline.fireChannelRead(readBuf.get(i));
                 }
                 readBuf.clear();
                 allocHandle.readComplete();
+                // 触发读取完成事件
                 pipeline.fireChannelReadComplete();
 
                 if (exception != null) {

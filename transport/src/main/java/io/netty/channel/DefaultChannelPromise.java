@@ -33,6 +33,8 @@ public class DefaultChannelPromise extends DefaultPromise<Void> implements Chann
     private long checkpoint;
 
     /**
+     * 创建一个DefaultChannelPromise实例
+     *
      * Creates a new instance.
      *
      * @param channel
@@ -43,6 +45,8 @@ public class DefaultChannelPromise extends DefaultPromise<Void> implements Chann
     }
 
     /**
+     * 创建一个DefaultChannelPromise实例，绑定关联一个通道Channel和事件执行器EventExecutor或事件循环EventLoop
+     *
      * Creates a new instance.
      *
      * @param channel

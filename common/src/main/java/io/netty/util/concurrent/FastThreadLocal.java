@@ -23,16 +23,46 @@ import java.util.IdentityHashMap;
 import java.util.Set;
 
 /**
+ * {@link FastThreadLocal}是一个专门设计的{@link ThreadLocal}（线程上下文、线程内部变量、线程局部变量,用于存储线程相关的变量或信息）变体类/派生类（功能类似）
+ * 相比Thread内访问ThreadLocal中的内容，使用快速线程本地变量线程类{@link FastThreadLocalThread}访问{@link FastThreadLocal}类可以提供更高访问性能
+ *
+ * variant 变体、派生
+ * yields 提供
+ * performance 性能，表现
+ *
  * A special variant of {@link ThreadLocal} that yields higher access performance when accessed from a
  * {@link FastThreadLocalThread}.
+ *
+ * 在{@link FastThreadLocal}内部，{@link FastThreadLocal}实例使用一个数组的常量索引，代替使用哈希码或哈希表，来查找一个变量。
+ * 虽然看起来很微妙，但它提供了轻微的性能优势相较于使用哈希表，并且它在频繁访问线程内部变量存储的内容时非常有用。
+ *
+ * subtle 微妙的
+ * slight 轻微的，细小的
+ * frequently 频繁地
+ *
  * <p>
  * Internally, a {@link FastThreadLocal} uses a constant index in an array, instead of using hash code and hash table,
  * to look for a variable.  Although seemingly very subtle, it yields slight performance advantage over using a hash
  * table, and it is useful when accessed frequently.
- * </p><p>
+ * </p>
+ *
+ * 要获取这个线程内部变量（线程上下文、线程局部变量）即@link FastThreadLocalThread}的优势，你的线程必须时一个FastThreadLocal类型支持的线程即{@link FastThreadLocalThread}线程或它的子类型。
+ * 一般情况下，由于这个原因，缺省线程工厂{@link DefaultThreadFactory}创建的所有的线程都是{@link FastThreadLocalThread}线程。
+ *
+ * variable 变量
+ * due to 由于
+ *
+ * <p>
  * To take advantage of this thread-local variable, your thread must be a {@link FastThreadLocalThread} or its subtype.
  * By default, all threads created by {@link DefaultThreadFactory} are {@link FastThreadLocalThread} due to this reason.
- * </p><p>
+ * </p>
+ *
+ * 在线程上，最快的实现方式就是扩展继承{@link FastThreadLocalThread}，因为它要求一个专门的成员存储需要的状态信息。
+ * 任何其它类型的线程使用{@link FastThreadLocal}，访问返回的则是一个普通的{@link ThreadLocal}。
+ *
+ * regular 常规的
+ *
+ * <p>
  * Note that the fast path is only possible on threads that extend {@link FastThreadLocalThread}, because it requires
  * a special field to store the necessary state.  An access by any other kind of thread falls back to a regular
  * {@link ThreadLocal}.
@@ -43,9 +73,14 @@ import java.util.Set;
  */
 public class FastThreadLocal<V> {
 
+    /**
+     * 将要删除的变量索引：用完后将要被删除的线程内部变量存储在线程FastThreadLocal内部InternalThreadLocalMap中对应的数组的索引即位置
+     */
     private static final int variablesToRemoveIndex = InternalThreadLocalMap.nextVariableIndex();
 
     /**
+     * 移除所有绑定到当前线程的{@link FastThreadLocal}变量。这个操作非常有用，当你在一个容器环境中，且不想留下/保留你没有管理的线程内的线程局部变量时。
+     *
      * Removes all {@link FastThreadLocal} variables bound to the current thread.  This operation is useful when you
      * are in a container environment, and you don't want to leave the thread local variables in the threads you do not
      * manage.

@@ -32,6 +32,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
+ * 一个全局单线程单例事件执行器
+ *
  * Single-thread singleton {@link EventExecutor}.  It starts the thread automatically and stops it when there is no
  * task pending in the task queue for 1 second.  Please note it is not scalable to schedule large number of tasks to
  * this executor; use a dedicated executor.

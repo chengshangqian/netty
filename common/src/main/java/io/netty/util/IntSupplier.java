@@ -16,11 +16,17 @@
 package io.netty.util;
 
 /**
+ * 相当于一个int值结果的提供者/供应商接口
+ *
+ * represent 代表，等于
+ *
  * Represents a supplier of {@code int}-valued results.
  */
 public interface IntSupplier {
 
     /**
+     * 获取一个int类型值的结果
+     *
      * Gets a result.
      *
      * @return a result

@@ -140,12 +140,21 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
         return name;
     }
 
+    /**
+     * 通知当前上下文，触发通道已经注册事件
+     * @return
+     */
     @Override
     public ChannelHandlerContext fireChannelRegistered() {
         invokeChannelRegistered(findContextInbound(MASK_CHANNEL_REGISTERED));
         return this;
     }
 
+    /**
+     * 通知下一个上下文的触发通道已注册
+     *
+     * @param next
+     */
     static void invokeChannelRegistered(final AbstractChannelHandlerContext next) {
         EventExecutor executor = next.executor();
         if (executor.inEventLoop()) {
@@ -160,6 +169,9 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
         }
     }
 
+    /**
+     * 通知当前上下文中的处理器触发通道注册事件，即调用处理器的channelRegistered(ctx)方法
+     */
     private void invokeChannelRegistered() {
         if (invokeHandler()) {
             try {
@@ -168,6 +180,7 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
                 invokeExceptionCaught(t);
             }
         } else {
+            // 通知pipeline上下一个上下文触发通道注册事件
             fireChannelRegistered();
         }
     }
@@ -477,14 +490,23 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
         return deregister(newPromise());
     }
 
+    /**
+     * 绑定上下文和本地主机地址
+     *
+     * @param localAddress
+     * @param promise
+     * @return
+     */
     @Override
     public ChannelFuture bind(final SocketAddress localAddress, final ChannelPromise promise) {
+        // 验证本地地址
         ObjectUtil.checkNotNull(localAddress, "localAddress");
         if (isNotValidPromise(promise, false)) {
             // cancelled
             return promise;
         }
 
+        // 从头部开始，执行绑定任务，从而触发绑定事件，从pipeline中的第1个上下文开始触发
         final AbstractChannelHandlerContext next = findContextOutbound(MASK_BIND);
         EventExecutor executor = next.executor();
         if (executor.inEventLoop()) {
@@ -500,9 +522,19 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
         return promise;
     }
 
+    /**
+     * 调用绑定
+     *
+     * @param localAddress
+     * @param promise
+     */
     private void invokeBind(SocketAddress localAddress, ChannelPromise promise) {
         if (invokeHandler()) {
             try {
+                // 绑定通道出站处理器
+                // 演示的服务端程序中没有设置主线程的handler，所以在已serverSocketChannel已经注册情况下，
+                // 服务端目前只绑定了一个处理器：ServerBootstrapAcceptor处理器（见{@link ServerBootstrap#init(Channel channel)}方法)
+               logger.debug("handler() => " + handler().getClass().getName());
                 ((ChannelOutboundHandler) handler()).bind(this, localAddress, promise);
             } catch (Throwable t) {
                 notifyOutboundHandlerException(t, promise);
@@ -512,11 +544,26 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
         }
     }
 
+    /**
+     * 连接远程主机
+     *
+     * @param remoteAddress
+     * @param promise
+     * @return
+     */
     @Override
     public ChannelFuture connect(SocketAddress remoteAddress, ChannelPromise promise) {
         return connect(remoteAddress, null, promise);
     }
 
+    /**
+     * 连接远程主机
+     *
+     * @param remoteAddress
+     * @param localAddress
+     * @param promise
+     * @return
+     */
     @Override
     public ChannelFuture connect(
             final SocketAddress remoteAddress, final SocketAddress localAddress, final ChannelPromise promise) {
@@ -527,8 +574,17 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
             return promise;
         }
 
+        /**
+         * 通道管道中的下一个上下文
+         */
         final AbstractChannelHandlerContext next = findContextOutbound(MASK_CONNECT);
+
+        /**
+         * 事件执行器
+         */
         EventExecutor executor = next.executor();
+
+        // 同一个线程内
         if (executor.inEventLoop()) {
             next.invokeConnect(remoteAddress, localAddress, promise);
         } else {
@@ -542,8 +598,18 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
         return promise;
     }
 
+    /**
+     * 连接远程主机
+     *
+     * @param remoteAddress
+     * @param localAddress
+     * @param promise
+     */
     private void invokeConnect(SocketAddress remoteAddress, SocketAddress localAddress, ChannelPromise promise) {
+
+        // 检测设置的处理器handler是否需要添加到通道管道pipeline中
         if (invokeHandler()) {
+            // 如果还没有添加到pipeline中，则连接前需要将管道处理器添加到pipeline中
             try {
                 ((ChannelOutboundHandler) handler()).connect(this, remoteAddress, localAddress, promise);
             } catch (Throwable t) {
@@ -882,6 +948,12 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
         return ctx;
     }
 
+    /**
+     * 找到头部
+     *
+     * @param mask
+     * @return
+     */
     private AbstractChannelHandlerContext findContextOutbound(int mask) {
         AbstractChannelHandlerContext ctx = this;
         EventExecutor currentExecutor = executor();
@@ -931,10 +1003,19 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
         assert updated; // This should always be true as it MUST be called before setAddComplete() or setRemoved().
     }
 
+    /**
+     * 触发调用通道处理器上下文ctx中的关联的通道处理器的handlerAdded(...)方法，
+     * 例如{@link ChannelInitializer#handlerAdded(ChannelHandlerContext)}方法
+     *
+     * @throws Exception
+     */
     final void callHandlerAdded() throws Exception {
+        // 在调用通道处理器的handlerAdded方法之前，我们必须先调用setAddComplete方法，
+        // 否则如果handlerAdded方法导致任何pipeline事件ctx.handler()将错误它们，因为状态不允许它(触发?)
         // We must call setAddComplete before calling handlerAdded. Otherwise if the handlerAdded method generates
         // any pipeline events ctx.handler() will miss them because the state will not allow it.
         if (setAddComplete()) {
+            logger.debug("================> 触发handlerAdded事件:::" + handler().getClass().getName());
             handler().handlerAdded(this);
         }
     }
@@ -952,16 +1033,24 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
     }
 
     /**
+     * 尽最大努力尝试检测{@link ChannelHandler#handlerAdded(ChannelHandlerContext)}方法是否已经被调用。
+     * 如果不返回{@code false}以及如果被调用或无法检测到返回{@code true}.
+     *
      * Makes best possible effort to detect if {@link ChannelHandler#handlerAdded(ChannelHandlerContext)} was called
      * yet. If not return {@code false} and if called or could not detect return {@code true}.
+     *
+     * 如果这个方法返回{@code false}，我们将不会调用通道处理器{@link ChannelHandler}但会传递事件。
+     * 这是有必要的因为缺省通道管道{@link DefaultChannelPipeline}可能已经把通道处理器{@link ChannelHandler}放进链表但没有调用{@link ChannelHandler#handlerAdded(ChannelHandlerContext)}方法。
      *
      * If this method returns {@code false} we will not invoke the {@link ChannelHandler} but just forward the event.
      * This is needed as {@link DefaultChannelPipeline} may already put the {@link ChannelHandler} in the linked-list
      * but not called {@link ChannelHandler#handlerAdded(ChannelHandlerContext)}.
      */
     private boolean invokeHandler() {
+        // 保存到局部标量以避免脏读
         // Store in local variable to reduce volatile reads.
         int handlerState = this.handlerState;
+
         return handlerState == ADD_COMPLETE || (!ordered && handlerState == ADD_PENDING);
     }
 

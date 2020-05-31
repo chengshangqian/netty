@@ -194,6 +194,9 @@ public interface Channel extends AttributeMap, ChannelOutboundInvoker, Comparabl
     Channel flush();
 
     /**
+     * 不安全操作集，封装了JAVA底层Socket操作，是Netty和Java底层的重要桥梁
+     * 只用于Netty框架内部使用，框架的用户不应该调用这些操作。这些方法仅提供实现特定的传输，以及除了以下一些方法之外的必须被I/O线程调用的情况：
+     *
      * <em>Unsafe</em> operations that should <em>never</em> be called from user-code. These methods
      * are only provided to implement the actual transport, and must be invoked from an I/O thread except for the
      * following methods:

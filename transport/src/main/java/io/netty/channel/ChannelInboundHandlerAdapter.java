@@ -16,6 +16,8 @@
 package io.netty.channel;
 
 import io.netty.channel.ChannelHandlerMask.Skip;
+import io.netty.util.internal.logging.InternalLogger;
+import io.netty.util.internal.logging.InternalLoggerFactory;
 
 /**
  * Abstract base class for {@link ChannelInboundHandler} implementations which provide

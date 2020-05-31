@@ -165,15 +165,27 @@ public abstract class AbstractScheduledEventExecutor extends AbstractEventExecut
         return scheduledTask != null && scheduledTask.deadlineNanos() <= nanoTime();
     }
 
+    /**
+     * 执行调度任务：延迟delay个时间单位unit后，执行任务
+     *
+     * @param command 任务
+     * @param delay 延迟时间
+     * @param unit
+     * @return
+     */
     @Override
     public ScheduledFuture<?> schedule(Runnable command, long delay, TimeUnit unit) {
         ObjectUtil.checkNotNull(command, "command");
         ObjectUtil.checkNotNull(unit, "unit");
+
         if (delay < 0) {
             delay = 0;
         }
+
+        // 校验延迟和单位设置
         validateScheduled0(delay, unit);
 
+        // 返回任务执行的异步回调
         return schedule(new ScheduledFutureTask<Void>(
                 this,
                 command,
@@ -246,13 +258,26 @@ public abstract class AbstractScheduledEventExecutor extends AbstractEventExecut
         // NOOP
     }
 
+    /**
+     * 当前线程中执行调度任务
+     *
+     * @param task
+     */
     final void scheduleFromEventLoop(final ScheduledFutureTask<?> task) {
         // nextTaskId a long and so there is no chance it will overflow back to 0
         scheduledTaskQueue().add(task.setId(++nextTaskId));
     }
 
+    /**
+     * 执行调度任务
+     *
+     * @param task
+     * @param <V>
+     * @return
+     */
     private <V> ScheduledFuture<V> schedule(final ScheduledFutureTask<V> task) {
         if (inEventLoop()) {
+            // 当前线程执行：主要时将任务添加到任务队列中
             scheduleFromEventLoop(task);
         } else {
             final long deadlineNanos = task.deadlineNanos();

@@ -27,14 +27,23 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.ThreadFactory;
 
 /**
+ * SingleThreadEventLoop是{@link EventLoop}的抽象基类，用于在一个单一线程中执行所有其自身提交的任务。
+ * 其继承了{@link SingleThreadEventExecutor}，本身也是一个事件执行器EventExecutor。
+ *
  * Abstract base class for {@link EventLoop}s that execute all its submitted tasks in a single thread.
  *
  */
 public abstract class SingleThreadEventLoop extends SingleThreadEventExecutor implements EventLoop {
 
+    /**
+     * 缺省最大挂起任务数：最小16个任务，最大为Integer.MAX_VALUE（16 <= DEFAULT_MAX_PENDING_TASKS <= Integer.MAX_VALUE）
+     */
     protected static final int DEFAULT_MAX_PENDING_TASKS = Math.max(16,
             SystemPropertyUtil.getInt("io.netty.eventLoop.maxPendingTasks", Integer.MAX_VALUE));
 
+    /**
+     * [尾部?]任务队列
+     */
     private final Queue<Runnable> tailTasks;
 
     protected SingleThreadEventLoop(EventLoopGroup parent, ThreadFactory threadFactory, boolean addTaskWakesUp) {
@@ -59,6 +68,16 @@ public abstract class SingleThreadEventLoop extends SingleThreadEventExecutor im
         tailTasks = newTaskQueue(maxPendingTasks);
     }
 
+    /**
+     * 创建SingleThreadEventLoop实例
+     *
+     * @param parent
+     * @param executor
+     * @param addTaskWakesUp
+     * @param taskQueue
+     * @param tailTaskQueue
+     * @param rejectedExecutionHandler
+     */
     protected SingleThreadEventLoop(EventLoopGroup parent, Executor executor,
                                     boolean addTaskWakesUp, Queue<Runnable> taskQueue, Queue<Runnable> tailTaskQueue,
                                     RejectedExecutionHandler rejectedExecutionHandler) {
@@ -76,11 +95,24 @@ public abstract class SingleThreadEventLoop extends SingleThreadEventExecutor im
         return (EventLoop) super.next();
     }
 
+    /**
+     * 将通道注册（绑定）到EventLoop
+     *
+     * @param channel
+     * @return
+     */
     @Override
     public ChannelFuture register(Channel channel) {
+        // this：EventLoop本身也是Executor
         return register(new DefaultChannelPromise(channel, this));
     }
 
+    /**
+     * 将通道注册（绑定）到EventLoop
+     *
+     * @param promise
+     * @return
+     */
     @Override
     public ChannelFuture register(final ChannelPromise promise) {
         ObjectUtil.checkNotNull(promise, "promise");

@@ -43,6 +43,9 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
 /**
+ * 所有NioChannel通道的抽象父类,
+ * 包括服务端和客户端的套接字通道{@link io.netty.channel.socket.nio.NioServerSocketChannel}和{@link io.netty.channel.socket.nio.NioSocketChannel}
+ *
  * Abstract base class for {@link Channel} implementations which use a Selector based approach.
  */
 public abstract class AbstractNioChannel extends AbstractChannel {
@@ -70,6 +73,7 @@ public abstract class AbstractNioChannel extends AbstractChannel {
     private SocketAddress requestedRemoteAddress;
 
     /**
+     * 创建一个新的AbstractNioChannel实例
      * Create a new instance
      *
      * @param parent            the parent {@link Channel} by which this instance was created. May be {@code null}
@@ -77,12 +81,20 @@ public abstract class AbstractNioChannel extends AbstractChannel {
      * @param readInterestOp    the ops to set to receive data from the {@link SelectableChannel}
      */
     protected AbstractNioChannel(Channel parent, SelectableChannel ch, int readInterestOp) {
+        // 调用父类，初始化父通道parent、
         super(parent);
+
+        // 初始化SocketChannel
         this.ch = ch;
+
+        // 初始化感兴趣的读取操作readInterestOp
         this.readInterestOp = readInterestOp;
+
+        // 设置套接字通道为非阻碍
         try {
             ch.configureBlocking(false);
         } catch (IOException e) {
+            // 设置失败，关闭套接字通道
             try {
                 ch.close();
             } catch (IOException e2) {
@@ -90,6 +102,7 @@ public abstract class AbstractNioChannel extends AbstractChannel {
                             "Failed to close a partially initialized socket.", e2);
             }
 
+            // 抛出异常
             throw new ChannelException("Failed to enter non-blocking mode.", e);
         }
     }
@@ -231,6 +244,13 @@ public abstract class AbstractNioChannel extends AbstractChannel {
             return javaChannel();
         }
 
+        /**
+         * 连接远程主机
+         *
+         * @param remoteAddress
+         * @param localAddress
+         * @param promise
+         */
         @Override
         public final void connect(
                 final SocketAddress remoteAddress, final SocketAddress localAddress, final ChannelPromise promise) {
@@ -239,22 +259,40 @@ public abstract class AbstractNioChannel extends AbstractChannel {
             }
 
             try {
+                // 重复发起连接
                 if (connectPromise != null) {
                     // Already a connect in process.
                     throw new ConnectionPendingException();
                 }
 
+                // 是否已经激活
                 boolean wasActive = isActive();
+
+                // 发起连接请求，尝试连接到远程主机
                 if (doConnect(remoteAddress, localAddress)) {
+                    // 连接成功
                     fulfillConnectPromise(promise, wasActive);
-                } else {
+                }
+                else {
+                    // 连接中，创建连接操作的异步回调，处理连接超时问题
+                    // 赋值连接操作的异步回调（与上面的fulfillConnectPromise中是同一个，即对外部程序无论成功或超时都是同一个异步回调对象来响应）
                     connectPromise = promise;
+
+                    //请求的远程主机地址
                     requestedRemoteAddress = remoteAddress;
 
+                    // 处理连接超时设置
                     // Schedule connect timeout.
+                    // 获取连接超时配置
                     int connectTimeoutMillis = config().getConnectTimeoutMillis();
+
+                    // 如果配置了连接超时时间，则创建
                     if (connectTimeoutMillis > 0) {
+                        // 执行调度任务，等待（消耗）connectTimeoutMillis时间，如果时间消耗完毕，将执行
                         connectTimeoutFuture = eventLoop().schedule(new Runnable() {
+                            /**
+                             * 等待超出connectTimeoutMillis
+                             */
                             @Override
                             public void run() {
                                 ChannelPromise connectPromise = AbstractNioChannel.this.connectPromise;
@@ -286,6 +324,13 @@ public abstract class AbstractNioChannel extends AbstractChannel {
             }
         }
 
+        /**
+         * 完成连接的事件回调
+         * 主要是触发channelActive事件
+         *
+         * @param promise
+         * @param wasActive
+         */
         private void fulfillConnectPromise(ChannelPromise promise, boolean wasActive) {
             if (promise == null) {
                 // Closed via cancellation and the promise has been notified already.
@@ -302,6 +347,8 @@ public abstract class AbstractNioChannel extends AbstractChannel {
             // Regardless if the connection attempt was cancelled, channelActive() event should be triggered,
             // because what happened is what happened.
             if (!wasActive && active) {
+                // 触发channelActive事件
+                logger.debug("================> 套接字管道连接成功，即将触发channelActive事件...");
                 pipeline().fireChannelActive();
             }
 
@@ -372,11 +419,18 @@ public abstract class AbstractNioChannel extends AbstractChannel {
         return loop instanceof NioEventLoop;
     }
 
+    /**
+     * 注册通道：将channel注册到EventLoop关联的Selector中
+     *
+     * @throws Exception
+     */
     @Override
     protected void doRegister() throws Exception {
         boolean selected = false;
         for (;;) {
             try {
+                // 将Channel注册到EventLoop关联的Selector
+                // 将当前关联的JavaNIO原生的套接字通道【javaChannel()】注册到关联的【eventLoop()】的选择器【unwrappedSelector()】上
                 selectionKey = javaChannel().register(eventLoop().unwrappedSelector(), 0, this);
                 return;
             } catch (CancelledKeyException e) {
@@ -399,6 +453,11 @@ public abstract class AbstractNioChannel extends AbstractChannel {
         eventLoop().cancel(selectionKey());
     }
 
+    /**
+     * 通道注册成功，并连接/激活后，开始监听可读事件
+     *
+     * @throws Exception
+     */
     @Override
     protected void doBeginRead() throws Exception {
         // Channel.read() or ChannelHandlerContext.read() was called
@@ -410,12 +469,17 @@ public abstract class AbstractNioChannel extends AbstractChannel {
         readPending = true;
 
         final int interestOps = selectionKey.interestOps();
+
+        logger.debug("================> 调用selectionKey.interestOps(interestOps | readInterestOp)，加入可读事件...");
+        // 查看通道是否监听了可读事件，如果没有，加入可读事件的监听
         if ((interestOps & readInterestOp) == 0) {
             selectionKey.interestOps(interestOps | readInterestOp);
         }
     }
 
     /**
+     * 连接到远程对等主机，由具体子类实现
+     *
      * Connect to the remote peer
      */
     protected abstract boolean doConnect(SocketAddress remoteAddress, SocketAddress localAddress) throws Exception;

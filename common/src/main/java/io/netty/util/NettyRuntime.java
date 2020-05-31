@@ -22,23 +22,32 @@ import io.netty.util.internal.SystemPropertyUtil;
 import java.util.Locale;
 
 /**
+ * 一个实用类用于包装对运行时Runtime的调用
+ * 即包装了对运行时Runtime的调用的一个实用类
+ *
  * A utility class for wrapping calls to {@link Runtime}.
  */
 public final class NettyRuntime {
 
     /**
+     * 开启检测有效的处理器（逻辑核心）数量的持有类
      * Holder class for available processors to enable testing.
      */
     static class AvailableProcessorsHolder {
 
+        /**
+         * 有效的处理器（逻辑核心）数
+         */
         private int availableProcessors;
 
         /**
+         * 有效的处理器（逻辑核心）数量
+         *
          * Set the number of available processors.
          *
-         * @param availableProcessors the number of available processors
-         * @throws IllegalArgumentException if the specified number of available processors is non-positive
-         * @throws IllegalStateException    if the number of available processors is already configured
+         * @param availableProcessors the number of available processors 有效的处理器（逻辑核心）数量
+         * @throws IllegalArgumentException if the specified number of available processors is non-positive 如果availableProcessors为负数，抛出IllegalArgumentException异常
+         * @throws IllegalStateException    if the number of available processors is already configured 如果availableProcessors已经设置过抛出IllegalStateException异常，即重复设置
          */
         synchronized void setAvailableProcessors(final int availableProcessors) {
             ObjectUtil.checkPositive(availableProcessors, "availableProcessors");

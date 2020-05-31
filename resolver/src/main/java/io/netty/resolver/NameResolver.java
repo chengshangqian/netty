@@ -23,6 +23,12 @@ import java.io.Closeable;
 import java.util.List;
 
 /**
+ * 终端地址解析器，将一个代表终端名称的任意字符串解析为地址
+ *
+ * resolve A into B 将A解析为B
+ * arbitrary 任意的
+ * represent 代表
+ *
  * Resolves an arbitrary string that represents the name of an endpoint into an address.
  */
 public interface NameResolver<T> extends Closeable {

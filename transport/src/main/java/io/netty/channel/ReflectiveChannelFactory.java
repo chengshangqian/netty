@@ -22,15 +22,26 @@ import io.netty.util.internal.StringUtil;
 import java.lang.reflect.Constructor;
 
 /**
+ * 反射型通道工厂ReflectiveChannelFactory
+ *
  * A {@link ChannelFactory} that instantiates a new {@link Channel} by invoking its default constructor reflectively.
  */
 public class ReflectiveChannelFactory<T extends Channel> implements ChannelFactory<T> {
 
+    /**
+     * 通道接口Channel的实现类型无参构造函数对象
+     */
     private final Constructor<? extends T> constructor;
 
+    /***
+     * 创建反射型通道工厂ReflectiveChannelFactory实例
+     *
+     * @param clazz
+     */
     public ReflectiveChannelFactory(Class<? extends T> clazz) {
         ObjectUtil.checkNotNull(clazz, "clazz");
         try {
+            // 获取指定类型的无参构造函数对象
             this.constructor = clazz.getConstructor();
         } catch (NoSuchMethodException e) {
             throw new IllegalArgumentException("Class " + StringUtil.simpleClassName(clazz) +
@@ -38,9 +49,15 @@ public class ReflectiveChannelFactory<T extends Channel> implements ChannelFacto
         }
     }
 
+    /**
+     * 创建通道实例
+     *
+     * @return
+     */
     @Override
     public T newChannel() {
         try {
+            // 使用指定通道类型的无参构造函数创建一个新的通道实例
             return constructor.newInstance();
         } catch (Throwable t) {
             throw new ChannelException("Unable to create Channel from class " + constructor.getDeclaringClass(), t);

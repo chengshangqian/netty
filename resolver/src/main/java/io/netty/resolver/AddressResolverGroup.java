@@ -31,6 +31,9 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentMap;
 
 /**
+ * 地址解析器组
+ * 创建和管理地址解析器{@link NameResolver}，让每个事件执行器{@link EventExecutor}可以拥有自己的地址解析器实例
+ *
  * Creates and manages {@link NameResolver}s so that each {@link EventExecutor} has its own resolver instance.
  */
 public abstract class AddressResolverGroup<T extends SocketAddress> implements Closeable {
@@ -49,22 +52,36 @@ public abstract class AddressResolverGroup<T extends SocketAddress> implements C
     protected AddressResolverGroup() { }
 
     /**
+     * 返回关联指定事件执行器{@link EventExecutor}的地址解析器{@link AddressResolver}。
+     * 如果指定的事件执行器还没有地址解析器，这个方法将会调用{@link #newResolver(EventExecutor)}方法创建一个地址解析器并返回。
+     * 调用{@link #newResolver(EventExecutor)}方法创建的地址解析器，
+     * 可以通过调用另外一个指定相同的{@link EventExecutor}参数的方法{@code #getResolver(EventExecutor)}而实现复用。
+     *
      * Returns the {@link AddressResolver} associated with the specified {@link EventExecutor}. If there's no associated
      * resolver found, this method creates and returns a new resolver instance created by
      * {@link #newResolver(EventExecutor)} so that the new resolver is reused on another
      * {@code #getResolver(EventExecutor)} call with the same {@link EventExecutor}.
      */
     public AddressResolver<T> getResolver(final EventExecutor executor) {
+        // 事件执行器不能为nul：EventLoop实例也是EventExecutor的实例
         ObjectUtil.checkNotNull(executor, "executor");
 
+        // 如果事件执行器正在关闭，将抛出异常
         if (executor.isShuttingDown()) {
             throw new IllegalStateException("executor not accepting a task");
         }
 
+        // 地址解析器
         AddressResolver<T> r;
+
+        // 同步锁，
         synchronized (resolvers) {
+            // 检查地址解析器组缓存中是否存在该执行器相关的地址解析器
             r = resolvers.get(executor);
+
+            // 如果不存在，将新建一个地址解析器
             if (r == null) {
+                // 新的地址解析器实例
                 final AddressResolver<T> newResolver;
                 try {
                     newResolver = newResolver(executor);
@@ -72,8 +89,12 @@ public abstract class AddressResolverGroup<T extends SocketAddress> implements C
                     throw new IllegalStateException("failed to create a new resolver", e);
                 }
 
+                // 将新的地址解析器放入到地址解析器组当中
                 resolvers.put(executor, newResolver);
 
+                /**
+                 * 注册未来事件，监听地址解析器的销毁
+                 */
                 final FutureListener<Object> terminationListener = new FutureListener<Object>() {
                     @Override
                     public void operationComplete(Future<Object> future) {
@@ -85,13 +106,16 @@ public abstract class AddressResolverGroup<T extends SocketAddress> implements C
                     }
                 };
 
+                // 绑定监听器
                 executorTerminationListeners.put(executor, terminationListener);
                 executor.terminationFuture().addListener(terminationListener);
 
+                // 赋值给地址解析器
                 r = newResolver;
             }
         }
 
+        // 返回地址解析器
         return r;
     }
 
