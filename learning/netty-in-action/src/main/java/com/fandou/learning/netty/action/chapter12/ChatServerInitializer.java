@@ -48,7 +48,8 @@ public class ChatServerInitializer extends ChannelInitializer<Channel> {
         pipeline.addLast(new HttpRequestHandler("/ws"));
 
         // 添加WebSocket协议处理器
-        pipeline.addLast(new WebSocketServerProtocolHandler("/ws"));
+        // checkStartsWith为true，可以让ws的连接带参数
+        pipeline.addLast(new WebSocketServerProtocolHandler("/ws",true));
 
         // 添加WebSocket协议文本帧的处理器：处理聊天室内容的接收和广播发送
         pipeline.addLast(new TextWebSocketFrameHandler(group));

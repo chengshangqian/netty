@@ -4,6 +4,7 @@ import io.netty.channel.*;
 import io.netty.handler.codec.http.*;
 import io.netty.handler.ssl.SslHandler;
 import io.netty.handler.stream.ChunkedNioFile;
+import io.netty.util.AttributeKey;
 
 import java.io.File;
 import java.io.RandomAccessFile;
@@ -57,8 +58,30 @@ public class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequ
      */
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, FullHttpRequest request) throws Exception {
+        String uri = request.uri().toLowerCase();
         // 如果当前请求是WebSocket请求
-        if(wsUri.equalsIgnoreCase(request.uri())){
+        // 配合添加到通道的WebSocketServerProtocolHandler处理的初始化参数checkStartsWith，
+        // 让ws协议连接可以带参数
+        if(uri.startsWith(wsUri)){
+        //if(wsUri.equalsIgnoreCase(uri)){
+            /*
+            if (uri.contains("?")) {
+                String[] uriArray = uri.split("\\?");
+                String[] paramsArray = uriArray[1].split("&");
+                for(String params : paramsArray){
+                    String[] param = params.split("=");
+                    if(null != param && param.length == 2){
+                        if(null != param[0]){
+                            AttributeKey<String> key = AttributeKey.valueOf(param[0]);
+                            ctx.channel().attr(key).set(param[1]);
+                        }
+                    }
+                }
+                // 重置参数
+                request.setUri(wsUri);
+            }
+             */
+
             // 增加引用计数并将请求传递给下一个处理器（WebSocket帧的处理器）进行处理
             ctx.fireChannelRead(request.retain());
         }
