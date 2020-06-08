@@ -51,6 +51,10 @@ public final class ThreadExecutorMap {
     public static Executor apply(final Executor executor, final EventExecutor eventExecutor) {
         ObjectUtil.checkNotNull(executor, "executor");
         ObjectUtil.checkNotNull(eventExecutor, "eventExecutor");
+
+        /**
+         * 匿名执行器实例，创建或从线程池中获取一个新的线程执行任务
+         */
         return new Executor() {
             @Override
             public void execute(final Runnable command) {

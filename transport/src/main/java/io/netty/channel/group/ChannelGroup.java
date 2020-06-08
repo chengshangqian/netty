@@ -31,6 +31,19 @@ import io.netty.util.concurrent.GlobalEventExecutor;
 import java.util.Set;
 
 /**
+ * ChannelGroup，通道组，顾名思义，通道Channel的集合。
+ * 它是一个线程安全的集合，其包含了打开的若干通道以及提供各种各样对这些通道的操作。
+ * 使用通道组，你可以对通道进行一个有意义的分组，例如基于服务或状态。
+ * 一个关闭的通道将会被自动从集合即通道组中移除，所以，你不需要担心这些通道的生命周期。
+ * 一个通道可以属于多于一个通道组，即一个通道可以被分类到多个通道组中。
+ *
+ * provide 提供
+ * various 各种各样的
+ * bulk 大量的
+ * categorize 分类
+ * meaningful 有意义
+ * e.g. 例如
+ *
  * A thread-safe {@link Set} that contains open {@link Channel}s and provides
  * various bulk operations on them.  Using {@link ChannelGroup}, you can
  * categorize {@link Channel}s into a meaningful group (e.g. on a per-service

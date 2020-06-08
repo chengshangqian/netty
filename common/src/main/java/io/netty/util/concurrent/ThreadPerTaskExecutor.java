@@ -16,6 +16,8 @@
 package io.netty.util.concurrent;
 
 import io.netty.util.internal.ObjectUtil;
+import io.netty.util.internal.logging.InternalLogger;
+import io.netty.util.internal.logging.InternalLoggerFactory;
 
 import java.util.concurrent.Executor;
 import java.util.concurrent.ThreadFactory;
@@ -24,6 +26,11 @@ import java.util.concurrent.ThreadFactory;
  * 线程执行器：每个任务分配一个线程
  */
 public final class ThreadPerTaskExecutor implements Executor {
+    /**
+     * 内部日志
+     */
+    private static final InternalLogger logger = InternalLoggerFactory.getInstance(ThreadPerTaskExecutor.class);
+
     /**
      * 线程工厂
      */
@@ -40,13 +47,15 @@ public final class ThreadPerTaskExecutor implements Executor {
     }
 
     /**
-     * 执行任务：为每个任务创建一个线程并开始执行
+     * 创建一个新的线程，并执行任务command
      *
      * @param command 任务/命令
      */
     @Override
     public void execute(Runnable command) {
-        // 使用线程工厂分配一个新/空闲的线程并开始执行任务
+        // 使用线程工厂开启一个新/空闲的线程并开始执行任务，此线程工厂为DefaultThreadFactory实例
+        // 创建的是快速线程内部变量的线程FastThreadLocalThread实例
+        logger.info("使用线程工厂创建新线程...");
         threadFactory.newThread(command).start();
     }
 }

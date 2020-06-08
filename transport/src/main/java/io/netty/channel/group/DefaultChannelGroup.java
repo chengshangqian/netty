@@ -38,6 +38,8 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
+ * 缺省通道组实现
+ *
  * The default {@link ChannelGroup} implementation.
  */
 public class DefaultChannelGroup extends AbstractSet<Channel> implements ChannelGroup {

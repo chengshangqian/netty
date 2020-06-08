@@ -218,7 +218,7 @@ public class Bootstrap extends AbstractBootstrap<Bootstrap, Channel> {
      */
     private ChannelFuture doResolveAndConnect(final SocketAddress remoteAddress, final SocketAddress localAddress) {
         /**
-         * 1.创建并初始化通道Channel，然后将通道Channel注册到EventLoop中关联的选择器Selector
+         * 1.创建并初始化通道Channel，将通道Channel和EventLoop关联，然后将通道Channel注册到EventLoop中关联的选择器Selector
          * 这个过程当中，会将处理器handler绑定到对应的channel中pipeline中
          */
         final ChannelFuture regFuture = initAndRegister();
@@ -243,10 +243,10 @@ public class Bootstrap extends AbstractBootstrap<Bootstrap, Channel> {
             // almost always 几乎总是
             // fulfilled 实现，执行，履行
             // Registration future is almost always fulfilled already, but just in case it's not.
-            // 创建待注册承诺对象，将检查channel是否未null
+            // 创建可写的异步回调执行【待注册异步回调执行promise】
             final PendingRegistrationPromise promise = new PendingRegistrationPromise(channel);
 
-            // 为通道注册异步回调对象添加监听器，内部绑定待注册承诺对象promise，监听注册完成事件
+            // 为通道注册异步回调结果添加监听器，内部绑定promise，监听注册完成事件
             regFuture.addListener(new ChannelFutureListener() {
                 /**
                  * 处理注册完成事件：注册完成，将触发此方法
@@ -290,7 +290,7 @@ public class Bootstrap extends AbstractBootstrap<Bootstrap, Channel> {
      * @param channel 连接到远程主机的的通道（本地对象）
      * @param remoteAddress 远程主机地址
      * @param localAddress 本地主机地址
-     * @param promise 通道承诺
+     * @param promise 异步回调执行对象
      * @return
      */
     private ChannelFuture doResolveAndConnect0(final Channel channel, SocketAddress remoteAddress,
@@ -306,10 +306,10 @@ public class Bootstrap extends AbstractBootstrap<Bootstrap, Channel> {
                 // 使用地址解析器组获取地址解析器
                 resolver = this.resolver.getResolver(eventLoop);
             } catch (Throwable cause) {
-                // 如果获取过程出现异常，关闭通道，管道承诺设置为失败状态并返回
+                // 如果获取过程出现异常，关闭通道
                 channel.close();
 
-                // 返回失败的承诺
+                // 异步回调执行状态设置为失败并返回
                 return promise.setFailure(cause);
             }
 
@@ -406,7 +406,7 @@ public class Bootstrap extends AbstractBootstrap<Bootstrap, Channel> {
         // 获取通道
         final Channel channel = connectPromise.channel();
 
-        // 创建一个任务，连接远程主机，并设置监听器，连接失败时关闭通道
+        // 创建一个线程任务，连接远程主机，并设置监听器，连接失败时关闭通道
         channel.eventLoop().execute(new Runnable() {
             /**
              * 定义运行的任务：连接远程主机和设置监听器
@@ -430,22 +430,23 @@ public class Bootstrap extends AbstractBootstrap<Bootstrap, Channel> {
     }
 
     /**
-     * 初始化通道channel
+     * 初始化客户端套接字通道
+     * 在调用NIO底层API连接远程主机前，调用此方法
      *
-     * @param channel (主线程)通道
+     * @param channel 客户端套接字通道实例，比如NioSocketChannel实例
      */
     @Override
     @SuppressWarnings("unchecked")
     void init(Channel channel) {
-        // 获取通道channel的管道pipeline
+        // 获取通道管道pipeline
         ChannelPipeline p = channel.pipeline();
 
-        logger.debug("================> 开始添加首个处理器...");
+        logger.debug("开始添加首个处理器...");
         // 将handler添加到pipeline中
         // 这是首次将处理器插入到pipeline中，注意此时的channel还未注册，将会创建一个PendingHandlerAddedTask任务，
         // 在注册通道时，该任务将会被执行
         p.addLast(config.handler());
-        logger.debug("================> 结束添加首个处理器...");
+        logger.debug("结束添加首个处理器...");
 
         // 设置ChannelOption
         setChannelOptions(channel, newOptionsArray(), logger);

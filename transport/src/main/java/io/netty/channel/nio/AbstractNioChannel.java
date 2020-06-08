@@ -54,8 +54,17 @@ public abstract class AbstractNioChannel extends AbstractChannel {
             InternalLoggerFactory.getInstance(AbstractNioChannel.class);
 
     private final SelectableChannel ch;
+
+    /**
+     * 通道感兴趣的事件
+     * NioServerSocketChannel：OP_ACCEPT
+     * NioSocketChannel：OP_READ
+     */
     protected final int readInterestOp;
     volatile SelectionKey selectionKey;
+    /**
+     * 读取等待中
+     */
     boolean readPending;
     private final Runnable clearReadPendingRunnable = new Runnable() {
         @Override
@@ -88,9 +97,10 @@ public abstract class AbstractNioChannel extends AbstractChannel {
         this.ch = ch;
 
         // 初始化感兴趣的读取操作readInterestOp
+        // 对于NioServerSocketChannel，readInterestOp的值实际上是OP_ACCEPT而不是OP_READ
         this.readInterestOp = readInterestOp;
 
-        // 设置套接字通道为非阻碍
+        // 设置套接字通道为非阻塞
         try {
             ch.configureBlocking(false);
         } catch (IOException e) {
@@ -265,7 +275,7 @@ public abstract class AbstractNioChannel extends AbstractChannel {
                     throw new ConnectionPendingException();
                 }
 
-                // 是否已经激活
+                // 记录连接前的激活状态
                 boolean wasActive = isActive();
 
                 // 发起连接请求，尝试连接到远程主机
@@ -288,7 +298,7 @@ public abstract class AbstractNioChannel extends AbstractChannel {
 
                     // 如果配置了连接超时时间，则创建
                     if (connectTimeoutMillis > 0) {
-                        // 执行调度任务，等待（消耗）connectTimeoutMillis时间，如果时间消耗完毕，将执行
+                        // 创建并提交一个调度任务（加会被加入到调度任务队列）
                         connectTimeoutFuture = eventLoop().schedule(new Runnable() {
                             /**
                              * 等待超出connectTimeoutMillis
@@ -305,6 +315,7 @@ public abstract class AbstractNioChannel extends AbstractChannel {
                         }, connectTimeoutMillis, TimeUnit.MILLISECONDS);
                     }
 
+                    // 加入一个取消连接的监听
                     promise.addListener(new ChannelFutureListener() {
                         @Override
                         public void operationComplete(ChannelFuture future) throws Exception {
@@ -326,7 +337,8 @@ public abstract class AbstractNioChannel extends AbstractChannel {
 
         /**
          * 完成连接的事件回调
-         * 主要是触发channelActive事件
+         *
+         * 主要是触发channelActive事件，然后将通道感兴趣的事件注册到选择器上。
          *
          * @param promise
          * @param wasActive
@@ -339,6 +351,7 @@ public abstract class AbstractNioChannel extends AbstractChannel {
 
             // Get the state as trySuccess() may trigger an ChannelFutureListener that will close the Channel.
             // We still need to ensure we call fireChannelActive() in this case.
+            // 获取通道当前的激活状态
             boolean active = isActive();
 
             // trySuccess() will return false if a user cancelled the connection attempt.
@@ -346,9 +359,10 @@ public abstract class AbstractNioChannel extends AbstractChannel {
 
             // Regardless if the connection attempt was cancelled, channelActive() event should be triggered,
             // because what happened is what happened.
+            // 如果之前的状态时未激活的，现在激活了，即首次激活，那么将触发一次激活事件
             if (!wasActive && active) {
                 // 触发channelActive事件
-                logger.debug("================> 套接字管道连接成功，即将触发channelActive事件...");
+                logger.info("channel连接成功，即将触发channelActive事件...");
                 pipeline().fireChannelActive();
             }
 
@@ -426,12 +440,17 @@ public abstract class AbstractNioChannel extends AbstractChannel {
      */
     @Override
     protected void doRegister() throws Exception {
+
         boolean selected = false;
+        // 轮询注册，直到注册成功或出现异常为止
         for (;;) {
             try {
                 // 将Channel注册到EventLoop关联的Selector
                 // 将当前关联的JavaNIO原生的套接字通道【javaChannel()】注册到关联的【eventLoop()】的选择器【unwrappedSelector()】上
+                // 同时将自己做为附件放入到selectionKey中，在后面轮询时，处理selectionKey时，会读取整个附件，见NioEventLoop#processSelectedKey(SelectionKey k, AbstractNioChannel ch)
+                // 注册时，不注册感兴趣的事件，而是在bind或connect成功即通道激活（channelActive)后才会将通道感兴趣的事件注册到选择器上
                 selectionKey = javaChannel().register(eventLoop().unwrappedSelector(), 0, this);
+                logger.info("调用Nio的API将通道channel注册到事件执行器/事件循环中的选择器selector上{}，同时将channel作为附件传递给选择器...",selectionKey.interestOps());
                 return;
             } catch (CancelledKeyException e) {
                 if (!selected) {
@@ -454,31 +473,41 @@ public abstract class AbstractNioChannel extends AbstractChannel {
     }
 
     /**
-     * 通道注册成功，并连接/激活后，开始监听可读事件
+     * 通道注册成功，通道激活后（打开且绑定），注册通道感兴趣的事件
+     * 这个方法名，感觉是要注册读取事件，实际上是将当前通道感兴趣的事情注册到选择器中，
+     * 因为要注册感兴趣事件之后，开始监听才有意义。
+     *
+     * 如果是从二进制流的角度，无论什么事件，都是从网络中读取信息，
+     * 也可以认为是准备开始从网路中读取信息，但实际做的事情就是注册感兴趣的事件
      *
      * @throws Exception
      */
     @Override
     protected void doBeginRead() throws Exception {
+        // 获取当前通道channel注册的选择键
         // Channel.read() or ChannelHandlerContext.read() was called
         final SelectionKey selectionKey = this.selectionKey;
         if (!selectionKey.isValid()) {
             return;
         }
 
+        // 读取等待中
         readPending = true;
 
+        // 获取当前通道已经监听或感兴趣的事件，通道注册时，默认interestOps设置为0，即未设置任何感兴趣的事件
         final int interestOps = selectionKey.interestOps();
 
-        logger.debug("================> 调用selectionKey.interestOps(interestOps | readInterestOp)，加入可读事件...");
-        // 查看通道是否监听了可读事件，如果没有，加入可读事件的监听
+        logger.info("当前通道已经注册的感兴趣事件interestOps={}...",interestOps);
+
+        // 如果没有可读事件，在原有感兴趣事件的基础上，再添加并开始监听OP_ACCEPT|OP_READ事件
         if ((interestOps & readInterestOp) == 0) {
+            logger.info("添加并开始监听OP_ACCEPT|OP_READ事件 -> {}..." ,readInterestOp);
             selectionKey.interestOps(interestOps | readInterestOp);
         }
     }
 
     /**
-     * 连接到远程对等主机，由具体子类实现
+     * 连接到远程对等主机，由具体子类实现，比如NioSocketChannel
      *
      * Connect to the remote peer
      */

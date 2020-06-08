@@ -18,6 +18,8 @@ package io.netty.util.concurrent;
 
 import io.netty.util.internal.ObjectUtil;
 import io.netty.util.internal.StringUtil;
+import io.netty.util.internal.logging.InternalLogger;
+import io.netty.util.internal.logging.InternalLoggerFactory;
 
 import java.util.Locale;
 import java.util.concurrent.ThreadFactory;
@@ -29,6 +31,10 @@ import java.util.concurrent.atomic.AtomicInteger;
  * A {@link ThreadFactory} implementation with a simple naming rule.
  */
 public class DefaultThreadFactory implements ThreadFactory {
+    /**
+     * 内部日志
+     */
+    private static final InternalLogger logger = InternalLoggerFactory.getInstance(DefaultThreadFactory.class);
 
     /**
      * 线程池原子id：线程池唯一标识
@@ -202,6 +208,8 @@ public class DefaultThreadFactory implements ThreadFactory {
             //设置线程的守护进程或优先级失败，可以忽略
             // Doesn't matter even if failed to set.
         }
+
+        logger.info("新线程创建成功 -> {}...",t.getName());
 
         // 返回线程实例
         return t;

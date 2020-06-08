@@ -118,6 +118,13 @@ final class ScheduledFutureTask<V> extends PromiseTask<V> implements ScheduledFu
         return deadlineToDelayNanos(deadlineNanos());
     }
 
+    /**
+     * 计算剩余超时时间
+     * 如果小于0，将返回0
+     *
+     * @param deadlineNanos
+     * @return
+     */
     static long deadlineToDelayNanos(long deadlineNanos) {
         return deadlineNanos == 0L ? 0L : Math.max(0L, deadlineNanos - nanoTime());
     }

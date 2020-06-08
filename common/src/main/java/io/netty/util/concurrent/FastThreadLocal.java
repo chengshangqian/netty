@@ -157,23 +157,43 @@ public class FastThreadLocal<V> {
         variablesToRemove.remove(variable);
     }
 
+    /**
+     * 索引，不可变
+     */
     private final int index;
 
+    /**
+     * 创建一个快速线程内部FastThreadLocal实例
+     */
     public FastThreadLocal() {
+        // 原子索引，整个应用程序中不会重复，类似数据库中的自增序列
+        // 当index大于InternalThreadLocalMap内部父类中Object[]数组indexedVariables初始化的长度时，
+        // 在调用存储对象的set方法时，会自动扩容后再存储。
+        // 每创建一个FastThreadLocal对象，会获得一个index索引，即每个FastThreadLocal实例持有一个不可变的index，
+        // 不同实例的FastThreadLocal对象，其index不相同，但用于存取变量用的InternalThreadLocalMap实例【相同线程下】只有一个。
+        // 这意味着如果需要存取多个不同的线程内的共享对象，创建多个FastThreadLocal实例来存取即可
         index = InternalThreadLocalMap.nextVariableIndex();
     }
 
     /**
+     * 返回当前线程下存储的共享变量的值，将调用initialize方法，
+     * 如果initialize方法被子类重载，则可以新建对象实例，当然也可以手动调用set设置
+     *
      * Returns the current value for the current thread
      */
     @SuppressWarnings("unchecked")
     public final V get() {
+        // 获取存储归属【当前线程】共享对象的threadLocalMap(即每个线程会有自己的threadLocalMap)
         InternalThreadLocalMap threadLocalMap = InternalThreadLocalMap.get();
+        // 在当前线程下的threadLocalMap中，
+        // 从threadLocalMap中的indexedVariables数组中检索位于index位置的对象
         Object v = threadLocalMap.indexedVariable(index);
+
         if (v != InternalThreadLocalMap.UNSET) {
             return (V) v;
         }
 
+        // 如果线程内部找不到，初始化
         return initialize(threadLocalMap);
     }
 
@@ -193,28 +213,44 @@ public class FastThreadLocal<V> {
     }
 
     /**
+     * 返回当前线程下存储的共享变量的值
+     *
      * Returns the current value for the specified thread local map.
      * The specified thread local map must be for the current thread.
      */
     @SuppressWarnings("unchecked")
     public final V get(InternalThreadLocalMap threadLocalMap) {
+        // 获取每个FastThreadLocal对象绑定的线程内部共享对象
         Object v = threadLocalMap.indexedVariable(index);
+
+        // 如果获取到的对象不是未设置对象，则返回
         if (v != InternalThreadLocalMap.UNSET) {
             return (V) v;
         }
 
+        // 否则将调用initialize方法创建
         return initialize(threadLocalMap);
     }
 
+    /**
+     * 初始化实例
+     *
+     * @param threadLocalMap
+     * @return
+     */
     private V initialize(InternalThreadLocalMap threadLocalMap) {
         V v = null;
         try {
+            // 调用initialValue创建实例，该方法可以被子类重载，
+            // 如果没有重载，返回null
             v = initialValue();
         } catch (Exception e) {
             PlatformDependent.throwException(e);
         }
 
+        // 创建后，存放到当前的threadLocalMap中对应的index位置
         threadLocalMap.setIndexedVariable(index, v);
+
         addToVariablesToRemove(threadLocalMap, this);
         return v;
     }
@@ -227,11 +263,14 @@ public class FastThreadLocal<V> {
             InternalThreadLocalMap threadLocalMap = InternalThreadLocalMap.get();
             setKnownNotUnset(threadLocalMap, value);
         } else {
+            // 从数组中移除：重置为UNSET对象
             remove();
         }
     }
 
     /**
+     * 有没有可能通过闭包或异步回调的方式从当前线程操作其它线程的内部变量?
+     *
      * Set the value for the specified thread local map. The specified thread local map must be for the current thread.
      */
     public final void set(InternalThreadLocalMap threadLocalMap, V value) {
@@ -283,11 +322,13 @@ public class FastThreadLocal<V> {
             return;
         }
 
+        // 从数组中移除：重置为UNSET对象
         Object v = threadLocalMap.removeIndexedVariable(index);
         removeFromVariablesToRemove(threadLocalMap, this);
 
         if (v != InternalThreadLocalMap.UNSET) {
             try {
+                // 由子类实现
                 onRemoval((V) v);
             } catch (Exception e) {
                 PlatformDependent.throwException(e);
@@ -296,6 +337,7 @@ public class FastThreadLocal<V> {
     }
 
     /**
+     * 返回线程内部共享的初始化值，子类可以重载
      * Returns the initial value for this thread-local variable.
      */
     protected V initialValue() throws Exception {

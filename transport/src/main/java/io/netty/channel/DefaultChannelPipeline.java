@@ -274,7 +274,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
     @Override
     public final ChannelPipeline addLast(EventExecutorGroup group, String name, ChannelHandler handler) {
 
-        logger.debug("================> 向pipeline中添加handler:::" + handler.getClass().getName());
+        logger.info("向pipeline中添加handler: {}",handler.getClass().getName());
 
         /**
          * 通道处理器上下文ctx
@@ -299,16 +299,18 @@ public class DefaultChannelPipeline implements ChannelPipeline {
             // 使用封装了handler和group的上下文newCtx创建一个待回调的插入处理器到pipeline的任务队列尾部，
             // 待后续通道channel被注册后执行任务从而调用触发ChannelHandler.handlerAdded(...)（事件）
             if (!registered) {
-                logger.debug("================> channel未注册...");
+                logger.info("channel未注册...");
                 newCtx.setAddPending();
                 callHandlerCallbackLater(newCtx, true);
                 return this;
             }
 
-            logger.debug("================> channel已注册...");
             // 如果channel已经注册
-            // 执行器和当前线程不是同一个线程，使用另外的线程执行触发插入处理器的事件
+            // 执行器和当前线程不是同一个线程，使用执行器线程执行触发插入处理器的事件
             EventExecutor executor = newCtx.executor();
+
+            logger.info("channel已注册，是否同一个线程 : {}...",executor.inEventLoop());
+
             if (!executor.inEventLoop()) {
                 callHandlerAddedInEventLoop(newCtx, executor);
                 //返回
@@ -316,7 +318,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
             }
         }
 
-        // 同在一个线程
+        // 同一个线程
         callHandlerAdded0(newCtx);
         return this;
     }
@@ -735,7 +737,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
      */
     private void callHandlerAdded0(final AbstractChannelHandlerContext ctx) {
         try {
-            logger.debug("================> ctx.callHandlerAdded()...");
+            logger.info("调用ctx.callHandlerAdded()触发handlerAdded事件...");
             ctx.callHandlerAdded();
         } catch (Throwable t) {
             boolean removed = false;
@@ -783,7 +785,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
             firstRegistration = false;
             // We are now registered to the EventLoop. It's time to call the callbacks for the ChannelHandlers,
             // that were added before the registration was done.
-            logger.debug("================> 调用callHandlerAddedForAllHandlers...");
+            logger.info("调用callHandlerAddedForAllHandlers执行前面步骤创建的添加处理器的任务...");
             callHandlerAddedForAllHandlers();
         }
     }
@@ -1031,42 +1033,80 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         }
     }
 
+    /**
+     * 触发通道激活channelActive事件
+     *
+     * @return
+     */
     @Override
     public final ChannelPipeline fireChannelActive() {
+        logger.info("从head节点开始触发channelActive事件...");
         AbstractChannelHandlerContext.invokeChannelActive(head);
         return this;
     }
 
+    /**
+     * 触发通道未激活或关闭channelInactive事件
+     *
+     * @return
+     */
     @Override
     public final ChannelPipeline fireChannelInactive() {
         AbstractChannelHandlerContext.invokeChannelInactive(head);
         return this;
     }
 
+    /**
+     * 触发异常捕获exceptionCaught事件
+     * @param cause
+     * @return
+     */
     @Override
     public final ChannelPipeline fireExceptionCaught(Throwable cause) {
         AbstractChannelHandlerContext.invokeExceptionCaught(head, cause);
         return this;
     }
 
+    /**
+     * 触发userEventTriggered事件
+     *
+     * @param event
+     * @return
+     */
     @Override
     public final ChannelPipeline fireUserEventTriggered(Object event) {
         AbstractChannelHandlerContext.invokeUserEventTriggered(head, event);
         return this;
     }
 
+    /**
+     * 触发通道可读channelRead事件
+     *
+     * @param msg
+     * @return
+     */
     @Override
     public final ChannelPipeline fireChannelRead(Object msg) {
         AbstractChannelHandlerContext.invokeChannelRead(head, msg);
         return this;
     }
 
+    /**
+     * 触发通道读取完成channelReadComplete事件
+     *
+     * @return
+     */
     @Override
     public final ChannelPipeline fireChannelReadComplete() {
         AbstractChannelHandlerContext.invokeChannelReadComplete(head);
         return this;
     }
 
+    /**
+     * 触发channelWritabilityChanged事件
+     *
+     * @return
+     */
     @Override
     public final ChannelPipeline fireChannelWritabilityChanged() {
         AbstractChannelHandlerContext.invokeChannelWritabilityChanged(head);
@@ -1118,12 +1158,22 @@ public class DefaultChannelPipeline implements ChannelPipeline {
      */
     @Override
     public final ChannelFuture bind(SocketAddress localAddress, ChannelPromise promise) {
-        // 绑定尾部上下文和本地主机地址
+        // 从尾部上下文执行绑定以触发相关事件
+        logger.info("调用tail.bind(localAddress, promise)方法...");
         return tail.bind(localAddress, promise);
     }
 
+    /**
+     * 连接远程主机
+     *
+     * @param remoteAddress
+     * @param promise
+     * @return
+     */
     @Override
     public final ChannelFuture connect(SocketAddress remoteAddress, ChannelPromise promise) {
+        // 从尾部上下文执行连接以触发相关事件
+        logger.info("调用tail.connect(remoteAddress, promise)方法...");
         return tail.connect(remoteAddress, promise);
     }
 
@@ -1148,8 +1198,15 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         return tail.deregister(promise);
     }
 
+    /**
+     * 读取
+     *
+     * @return
+     */
     @Override
     public final ChannelPipeline read() {
+        // 从尾部开始读取
+        logger.info("调用tail.read()...");
         tail.read();
         return this;
     }
@@ -1169,6 +1226,12 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         return tail.writeAndFlush(msg, promise);
     }
 
+    /**
+     * 从链表尾部开始向头部逐个流经出站处理器最后到头部输出到通道
+     *
+     * @param msg
+     * @return
+     */
     @Override
     public final ChannelFuture writeAndFlush(Object msg) {
         return tail.writeAndFlush(msg);
@@ -1267,9 +1330,9 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         // This must happen outside of the synchronized(...) block as otherwise handlerAdded(...) may be called while
         // holding the lock and so produce a deadlock if handlerAdded(...) will try to add another handler from outside
         // the EventLoop.
-        logger.debug("================> 遍历PendingHandlerCallback任务(PendingHandlerAddedTask)，准备执行...");
         PendingHandlerCallback task = pendingHandlerCallbackHead;
         while (task != null) {
+            logger.info("遍历PendingHandlerAddedTask任务，准备执行...");
             task.execute();
             task = task.next;
         }
@@ -1282,7 +1345,6 @@ public class DefaultChannelPipeline implements ChannelPipeline {
      * @param added
      */
     private void callHandlerCallbackLater(AbstractChannelHandlerContext ctx, boolean added) {
-        logger.debug("================> callHandlerCallbackLater(ctx, true)...");
 
         assert !registered;
 
@@ -1291,6 +1353,8 @@ public class DefaultChannelPipeline implements ChannelPipeline {
 
         // 刚开始pendingHandlerCallbackHead应该为null
         PendingHandlerCallback pending = pendingHandlerCallbackHead;
+
+        logger.info("将创建的PendingHandlerAddedTask任务添加到任务链表中,等channel注册后再添加...");
 
         // 如果为null，则添加为第一个任务
         if (pending == null) {
@@ -1313,8 +1377,9 @@ public class DefaultChannelPipeline implements ChannelPipeline {
      * @param executor
      */
     private void callHandlerAddedInEventLoop(final AbstractChannelHandlerContext newCtx, EventExecutor executor) {
-        logger.debug("================> 调用callHandlerAddedInEventLoop(newCtx, executor)...");
+        logger.info("创建任务并准备开始执行添加handler任务...");
         newCtx.setAddPending();
+        // 使用执行器的线程执行任务
         executor.execute(new Runnable() {
             @Override
             public void run() {
@@ -1524,6 +1589,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         @Override
         public void bind(
                 ChannelHandlerContext ctx, SocketAddress localAddress, ChannelPromise promise) {
+            logger.info("调用unsafe.bind(localAddress, promise)方法绑定本地主机地址... ");
             unsafe.bind(localAddress, promise);
         }
 
@@ -1558,11 +1624,26 @@ public class DefaultChannelPipeline implements ChannelPipeline {
             unsafe.deregister(promise);
         }
 
+        /**
+         * 开始读取来自网络信息的信息
+         *
+         * @param ctx
+         */
         @Override
         public void read(ChannelHandlerContext ctx) {
+            // 开始监听读取
+            logger.info("调用unsafe.beginRead()方法，注册通道感兴趣的OP_ACCEPT|OP_READ事件 ...");
+            //  实际上是将当前通道初始化时设置的感兴趣事件，注册到选择器上
             unsafe.beginRead();
         }
 
+        /**
+         * 将数据写出
+         *
+         * @param ctx               the {@link ChannelHandlerContext} for which the write operation is made
+         * @param msg               the message to write
+         * @param promise           the {@link ChannelPromise} to notify once the operation completes
+         */
         @Override
         public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) {
             unsafe.write(msg, promise);
@@ -1594,10 +1675,17 @@ public class DefaultChannelPipeline implements ChannelPipeline {
             }
         }
 
+        /**
+         * 监听通道激活事件
+         *
+         * @param ctx
+         */
         @Override
         public void channelActive(ChannelHandlerContext ctx) {
+            // 向下传递事件
             ctx.fireChannelActive();
 
+            logger.info("调用readIfIsAutoRead方法，准备注册通道感兴趣的OP_ACCEPT|OP_READ事件 ...");
             readIfIsAutoRead();
         }
 
@@ -1618,8 +1706,15 @@ public class DefaultChannelPipeline implements ChannelPipeline {
             readIfIsAutoRead();
         }
 
+        /**
+         * 如果设置了自动开始读取
+         * 则调用通道的read方法，注册通道感兴趣的OP_ACCEPT|OP_READ事件以开始读取来自网络的内容
+         */
         private void readIfIsAutoRead() {
+            logger.info("channel.config().isAutoRead()?{}...",channel.config().isAutoRead());
             if (channel.config().isAutoRead()) {
+                logger.info("调用channel.read()...");
+                // 注册通道感兴趣的OP_ACCEPT|OP_READ事件以开始读取来自网络的内容
                 channel.read();
             }
         }
@@ -1653,12 +1748,12 @@ public class DefaultChannelPipeline implements ChannelPipeline {
 
         PendingHandlerAddedTask(AbstractChannelHandlerContext ctx) {
             super(ctx);
-            logger.debug("================> 创建PendingHandlerAddedTask任务...");
-
+            logger.info("创建PendingHandlerAddedTask任务...");
         }
 
         @Override
         public void run() {
+            logger.info("执行PendingHandlerAddedTask任务(run),将调用callHandlerAdded0(ctx)方法...");
             // 执行处理器添加事件
             callHandlerAdded0(ctx);
         }
@@ -1669,13 +1764,13 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         @Override
         void execute() {
             EventExecutor executor = ctx.executor();
-            logger.debug("================> 执行PendingHandlerAddedTask任务，调用callHandlerAdded0(ctx)方法...");
+            logger.info("执行PendingHandlerAddedTask任务，将调用callHandlerAdded0(ctx)方法添加handler,{}......",executor.inEventLoop());
             if (executor.inEventLoop()) {
                 // 当前线程执行处理器添加事件
                 callHandlerAdded0(ctx);
             } else {
                 try {
-                    // 另外开启线程执行处理器添加事件
+                    // 使用执行器线程执行处理器添加事件
                     executor.execute(this);
                 } catch (RejectedExecutionException e) {
                     if (logger.isWarnEnabled()) {

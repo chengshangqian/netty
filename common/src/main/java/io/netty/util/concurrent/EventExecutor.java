@@ -16,6 +16,15 @@
 package io.netty.util.concurrent;
 
 /**
+ * EventExecutor，事件执行器
+ * 事件执行器是一个特殊的事件执行器组EventExecutorGroup，它附带了一些称手的方法来查看一个线程Thread是否在同一个事件循环中执行。
+ * 除此之外，它同时继承/扩展了事件执行器组，以允许使用一个通用的方式去访问这些方法。
+ *
+ * come with 伴随…发生;与……一起供给;与……一起来
+ * handy 易使用的;容易做的;便利的;近便;便利;手巧;有手艺
+ * allow for 考虑到;将…计算在内;顾及
+ * generic 一般的;普通的;通用的;
+ *
  * The {@link EventExecutor} is a special {@link EventExecutorGroup} which comes
  * with some handy methods to see if a {@link Thread} is executed in a event loop.
  * Besides this, it also extends the {@link EventExecutorGroup} to allow for a generic

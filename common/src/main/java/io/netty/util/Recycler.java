@@ -167,15 +167,27 @@ public abstract class Recycler<T> {
 
     @SuppressWarnings("unchecked")
     public final T get() {
+
         if (maxCapacityPerThread == 0) {
             return newObject((Handle<T>) NOOP_HANDLE);
         }
+
+        // 获取当前线程的对象T实例的回收栈
         Stack<T> stack = threadLocal.get();
+
+        // 弹出持有者
         DefaultHandle<T> handle = stack.pop();
+
+        // 首次应为null
         if (handle == null) {
+            // 创建一个持有者
             handle = stack.newHandle();
+
+            // 持有的对象者指向先创建的对象
             handle.value = newObject(handle);
         }
+
+        // 如果存在该对象的持有者，返回持有的对象是实例
         return (T) handle.value;
     }
 
@@ -718,6 +730,11 @@ public abstract class Recycler<T> {
             return false;
         }
 
+        /**
+         * 创建一个默认的DefaultHandle实例
+         *
+         * @return
+         */
         DefaultHandle<T> newHandle() {
             return new DefaultHandle<T>(this);
         }

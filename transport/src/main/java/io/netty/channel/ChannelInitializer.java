@@ -117,6 +117,8 @@ public abstract class ChannelInitializer<C extends Channel> extends ChannelInbou
          // 一般情况下，这个方法永远不会被调用，因为handlerAdded(ctx)方法会调用initChannel(ctx)方法然后删除对应的处理器handler
         // Normally this method will never be called as handlerAdded(...) should call initChannel(...) and remove
         // the   handler.
+         logger.info("收到channelRegistered事件...");
+         logger.info("channelRegistered中调用处理器的初始化通道方法initChannel(ctx)...");
 
          // 初始化通道
         if (initChannel(ctx)) {
@@ -159,7 +161,7 @@ public abstract class ChannelInitializer<C extends Channel> extends ChannelInbou
      */
     @Override
     public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
-        logger.debug("================> 收到handlerAdded事件...");
+        logger.info("收到handlerAdded事件...");
         // 如果关联的通道channel已注册
         if (ctx.channel().isRegistered()) {
             // This should always be true with our current DefaultChannelPipeline implementation.
@@ -171,7 +173,7 @@ public abstract class ChannelInitializer<C extends Channel> extends ChannelInbou
             // 这是因为所有的处理器都会按预期的按顺序被添加
 
             // 调用处理器的初始化通道方法
-            logger.debug("================> handlerAdded中调用处理器的初始化通道方法initChannel(ctx)...");
+            logger.info("handlerAdded中调用处理器的初始化通道方法initChannel(ctx)...");
             if (initChannel(ctx)) {
 
                 // 通道初始化完毕，移除通道初始化器，避免重复触发此事件，重复添加处理器
@@ -204,10 +206,10 @@ public abstract class ChannelInitializer<C extends Channel> extends ChannelInbou
     private boolean initChannel(ChannelHandlerContext ctx) throws Exception {
         // 【首次】将通道处理器上下文ctx添加到initMap中
         if (initMap.add(ctx)) { // Guard against re-entrance.
-            logger.debug("================> 调用initMap.add(ctx)...");
+            logger.info("调用initMap.add(ctx)...");
             try {
                 // 抽象模板方法，最终调用具体子类的实现，初始化通道，为注册的通道添加通道处理器
-                logger.debug("================> 调用initChannel((C) ctx.channel())...");
+                logger.info("调用initChannel((C) ctx.channel())...");
                 initChannel((C) ctx.channel());
             } catch (Throwable cause) {
                 // Explicitly call exceptionCaught(...) as we removed the handler before calling initChannel(...).

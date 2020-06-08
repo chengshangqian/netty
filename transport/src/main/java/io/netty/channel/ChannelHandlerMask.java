@@ -71,30 +71,52 @@ final class ChannelHandlerMask {
             };
 
     /**
+     * 返回处理器的执行掩码
+     *
      * Return the {@code executionMask}.
      */
     static int mask(Class<? extends ChannelHandler> clazz) {
         // Try to obtain the mask from the cache first. If this fails calculate it and put it in the cache for fast
         // lookup in the future.
+        //
+        // obtain 获得
+        // mask 掩码
+        //
+        // 尝试先从缓存中获取掩码。如果失败，再计算并将其放入缓存中，以便将来快速查找。
         Map<Class<? extends ChannelHandler>, Integer> cache = MASKS.get();
         Integer mask = cache.get(clazz);
+
         if (mask == null) {
+
+            // 计算执行掩码
             mask = mask0(clazz);
+
+            // 放入缓存中
             cache.put(clazz, mask);
         }
+
         return mask;
     }
 
     /**
+     * 计算执行掩码：可以检查处理器中覆盖了几个父类的方法
+     *
      * Calculate the {@code executionMask}.
      */
     private static int mask0(Class<? extends ChannelHandler> handlerType) {
         int mask = MASK_EXCEPTION_CAUGHT;
         try {
+            // 入站处理器的执行掩码计算
             if (ChannelInboundHandler.class.isAssignableFrom(handlerType)) {
+                // 首先获得所有入站的掩码（方法）合集
                 mask |= MASK_ALL_INBOUND;
 
+                // 然后逐个排除继承自父类的可跳过的方法，即处理器没有重载的方法。后面触发相应事件时，没有重载改方法的处理器将不会被调用。
+                // 确认掩码对应位置的方法是否是可跳过的，如果是，说名处理器的该方法时继承自父类的，即表示没有重载该父类方法
+                // 在触发事件时，则可以通过位运算排除调用该处理器的该方法
                 if (isSkippable(handlerType, "channelRegistered", ChannelHandlerContext.class)) {
+                    // 取反（1->0，0->1)，与运算后，mask对应channelRegistered方法的标识位将为0，
+                    // 从而剔除channelRegistered方法
                     mask &= ~MASK_CHANNEL_REGISTERED;
                 }
                 if (isSkippable(handlerType, "channelUnregistered", ChannelHandlerContext.class)) {
@@ -120,6 +142,7 @@ final class ChannelHandlerMask {
                 }
             }
 
+            // 出站处理器的执行掩码计算
             if (ChannelOutboundHandler.class.isAssignableFrom(handlerType)) {
                 mask |= MASK_ALL_OUTBOUND;
 
@@ -152,6 +175,7 @@ final class ChannelHandlerMask {
                 }
             }
 
+            // 可跳过的执行掩码：异常exceptionCaught方法
             if (isSkippable(handlerType, "exceptionCaught", ChannelHandlerContext.class, Throwable.class)) {
                 mask &= ~MASK_EXCEPTION_CAUGHT;
             }
@@ -163,12 +187,22 @@ final class ChannelHandlerMask {
         return mask;
     }
 
+    /**
+     * 判断是否是否可跳过的处理器
+     *
+     * @param handlerType 处理器类型
+     * @param methodName 掩码位置对应处理器中的方法名
+     * @param paramTypes 方法参数类型（组）
+     * @return
+     * @throws Exception
+     */
     @SuppressWarnings("rawtypes")
     private static boolean isSkippable(
             final Class<?> handlerType, final String methodName, final Class<?>... paramTypes) throws Exception {
         return AccessController.doPrivileged(new PrivilegedExceptionAction<Boolean>() {
             @Override
             public Boolean run() throws Exception {
+                // 利用反射，检查是否存在该方法
                 Method m;
                 try {
                     m = handlerType.getMethod(methodName, paramTypes);
@@ -179,6 +213,8 @@ final class ChannelHandlerMask {
                     }
                     return false;
                 }
+
+                // 如果该方法存在并且被注解为Skip
                 return m != null && m.isAnnotationPresent(Skip.class);
             }
         });

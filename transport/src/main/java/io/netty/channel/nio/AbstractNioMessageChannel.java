@@ -21,6 +21,9 @@ import io.netty.channel.ChannelOutboundBuffer;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.RecvByteBufAllocator;
 import io.netty.channel.ServerChannel;
+import io.netty.channel.socket.nio.NioServerSocketChannel;
+import io.netty.util.internal.logging.InternalLogger;
+import io.netty.util.internal.logging.InternalLoggerFactory;
 
 import java.io.IOException;
 import java.net.PortUnreachableException;
@@ -33,6 +36,11 @@ import java.util.List;
  * {@link AbstractNioChannel} base class for {@link Channel}s that operate on messages.
  */
 public abstract class AbstractNioMessageChannel extends AbstractNioChannel {
+    /**
+     * 内部日志
+     */
+    private static final InternalLogger logger = InternalLoggerFactory.getInstance(AbstractNioMessageChannel.class);
+
     boolean inputShutdown;
 
     /**
@@ -60,7 +68,7 @@ public abstract class AbstractNioMessageChannel extends AbstractNioChannel {
         private final List<Object> readBuf = new ArrayList<Object>();
 
         /**
-         * 处理可读事件或接受事件
+         * 处理服务端的可读事件或接受事件
          */
         @Override
         public void read() {
@@ -76,7 +84,15 @@ public abstract class AbstractNioMessageChannel extends AbstractNioChannel {
                 // 开始读取数据
                 try {
                     do {
-                        // 创建一个子NioSocketChannel封装到readBuf，然后触发ServerBootstrapAdaptor处理器的事件处理方法
+                        // 调用模板方法，有具体子类读取消息内容，
+                        // 对于非阻塞的服务端通道NioServerSocketChannel，
+                        // a.首先，doReadMessages方法将创建一个客户端的非阻塞套接字NioSocketChannel作为消息体添加到readBuf消息列表，
+                        // b.接着，通过触发下一个通道上下文处理器即ServerBootstrapAcceptor处理器的读取方法，将创建的NioSocketChannel对象作为消息传递给子事件循环childGroup去初始化和注册，
+                        // c.然后，childGroup通过注册关联Selector的过程中，将childHandler添加到创建的NioSocketChannel对象对应的pipeline中，
+                        // d，最后，添加handler过程中，会触发handlerAdd事件，真正的业务处理器重写了可读事件方法，从而实现处理读取通道中的字节缓冲数据
+
+                        // 1.调用服务端主线程通道读取消息：
+                        // 仅接受客户端请求，然后讲客户端请求封装为NioSocketChannel，作为消息传递给pipeline中的监听读取事件的处理器，目前pipeline中只有一个ServerBootstrapAcceptor处理器
                         int localRead = doReadMessages(readBuf);
                         if (localRead == 0) {
                             break;
@@ -92,11 +108,13 @@ public abstract class AbstractNioMessageChannel extends AbstractNioChannel {
                     exception = t;
                 }
 
+                logger.info("从通道管道pipeline头部处理器开始触发channelRead事件，将封装的消息（客户端通道NioSocketChannel实例）传递给ServerBootstrapAcceptor处理器...");
                 int size = readBuf.size();
                 for (int i = 0; i < size; i ++) {
                     readPending = false;
-                    // 触发读取事件：此时先触发ServerBootstrapAdaptor处理器上下文，
-                    // 然后ServerBootstrapAdaptor处理器上下文会把子封装的channel注册到工作线程的eventLoop的选择器上，然
+                    // 触发pipeline中对可读事件感兴趣的处理器
+                    // 此时触发的是ServerBootstrapAcceptor处理器上下文
+                    // 然后ServerBootstrapAcceptor处理器上下文会把子封装的channel注册到工作线程的eventLoop的选择器上，然
                     // 最后真正的业务逻辑处理器的事件进行响应或进行相关处理：而客户端的子channel的read方法将真正的读取数据
                     pipeline.fireChannelRead(readBuf.get(i));
                 }

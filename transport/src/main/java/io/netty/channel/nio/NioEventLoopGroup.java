@@ -32,8 +32,9 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.ThreadFactory;
 
 /**
- * NioEventLoopGroup是{@link MultithreadEventLoopGroup}的实现，其超类同时实现了JAVA NIO的ExecutorService接口,即本身就是线程池
- * {@link MultithreadEventLoopGroup}(被)用于基于NIO选择器(Selector)的通道(Channels)。
+ * NioEventLoopGroup，非阻塞事件循环组
+ * 它是多线程事件循环组{@link MultithreadEventLoopGroup}的实现，其超类同时实现了NIO的ExecutorService接口,即本身就是线程池。
+ * 它用于基于NIO选择器Selector的通道上。
  *
  * used for 用于
  * A based B B 基于 A
@@ -270,7 +271,7 @@ public class NioEventLoopGroup extends MultithreadEventLoopGroup {
     }
 
     /**
-     * 创建子事件循环（子线程）
+     * 创建子事件循环，内部主要封装了执行器executor、以及选择器selector等
      *
      * @param executor （主）线程执行器
      * @param args 参数

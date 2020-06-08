@@ -33,6 +33,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 class UnpaddedInternalThreadLocalMap {
 
     static final ThreadLocal<InternalThreadLocalMap> slowThreadLocalMap = new ThreadLocal<InternalThreadLocalMap>();
+
+    /**
+     * 下一个变量的原子索引
+     */
     static final AtomicInteger nextIndex = new AtomicInteger();
 
     /** Used by {@link FastThreadLocal} */
@@ -55,6 +59,11 @@ class UnpaddedInternalThreadLocalMap {
     // ArrayList-related thread-locals
     ArrayList<Object> arrayList;
 
+    /**
+     * 创建一个可索引数组的内部线程局部映射对象实例
+     *
+     * @param indexedVariables
+     */
     UnpaddedInternalThreadLocalMap(Object[] indexedVariables) {
         this.indexedVariables = indexedVariables;
     }

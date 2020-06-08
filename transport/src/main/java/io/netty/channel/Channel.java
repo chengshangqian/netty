@@ -28,8 +28,17 @@ import java.net.SocketAddress;
 
 
 /**
+ * Channel，通道
+ * 网络套接字或有I/O操作比如读、写、连接以及绑定等能力的组件的一个关联类。
+ *
+ * capable 有能力;有才能;能力强的;足以胜任的
+ *
  * A nexus to a network socket or a component which is capable of I/O
  * operations such as read, write, connect, and bind.
+ *
+ *  对使用通道的用户(开发人员)，它提供了通道的当前状态信息（例如打开状态、已连接状态等）、通道的配置（比如接收数据的缓冲大小等）、通道支持的I/O操作方法（读、写、连接和绑定等）、
+ *  以及关联用于处理所有I/O事件和请求的通道管道pipeline。
+ *
  * <p>
  * A channel provides a user:
  * <ul>
@@ -40,6 +49,13 @@ import java.net.SocketAddress;
  *     associated with the channel.</li>
  * </ul>
  *
+ *  它的所有I/O操作方法都是异步的。
+ *  在Netty框架中，所有的I/O操作都是异步的。这意味着任何I/O的调用将会立即返回，但不保证在调用结束时被请求的I/O操作已经完成。
+ *  相反，你会被返回一个通道未来ChannelFuture即异步回调实例，它会在被请求的I/O操作确定成功、失败或取消时(将结果)通知你。
+ *
+ *  asynchronous 异步的
+ *  guarantee 保证
+ *
  * <h3>All I/O operations are asynchronous.</h3>
  * <p>
  * All I/O operations in Netty are asynchronous.  It means any I/O calls will
@@ -47,6 +63,14 @@ import java.net.SocketAddress;
  * been completed at the end of the call.  Instead, you will be returned with
  * a {@link ChannelFuture} instance which will notify you when the requested I/O
  * operation has succeeded, failed, or canceled.
+ *
+ * 它有（父子）层级关系。
+ * 一个通道可以有一个父通道，（是否有父通道）具体取决于通道是如何被创建的。
+ * 例如，一个在服务器套接字通道ServerSocketChannel接受客户端请求时创建的套接字通道SocketChannel，
+ * 调用它的parent()方法将返回该服务器套接字通道实例。
+ *
+ * 层次结构的语义取决于通道所属的传输实现。
+ * 例如，您可以编写一个新的通道实现类，该实现类创建与BEEP和SSH共享一个套接字连接的子通道。
  *
  * <h3>Channels are hierarchical</h3>
  * <p>
@@ -61,12 +85,20 @@ import java.net.SocketAddress;
  * share one socket connection, as <a href="http://beepcore.org/">BEEP</a> and
  * <a href="http://en.wikipedia.org/wiki/Secure_Shell">SSH</a> do.
  *
+ * 向下转换以访问特定于传输的操作（向下兼容？）
+ *
  * <h3>Downcast to access transport-specific operations</h3>
  * <p>
  * Some transports exposes additional operations that is specific to the
  * transport.  Down-cast the {@link Channel} to sub-type to invoke such
  * operations.  For example, with the old I/O datagram transport, multicast
  * join / leave operations are provided by {@link DatagramChannel}.
+ *
+ * 释放资源
+ * 一旦你的通道操作完成，调用close()或close(ChannelPromise)方法及时释放所有资源非常重要。
+ * 调用close()或close(ChannelPromise)方法可以确保以正确的方式使用所有资源，即文件句柄.
+ *
+ * ensure 保证，确保
  *
  * <h3>Release resources</h3>
  * <p>

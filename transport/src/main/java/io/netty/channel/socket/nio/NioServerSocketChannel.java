@@ -175,7 +175,7 @@ public class NioServerSocketChannel extends AbstractNioMessageChannel
     }
 
     /**
-     * 开始接受客户端请求，读读取消息
+     * 接收到客户端的请求或可读事件，只处理ACCEPT事件，可读事件交由childGroup处理
      *
      * @param buf
      * @return
@@ -183,10 +183,12 @@ public class NioServerSocketChannel extends AbstractNioMessageChannel
      */
     @Override
     protected int doReadMessages(List<Object> buf) throws Exception {
-        // 接受客户端请求
+        logger.info("调用NioServerSocketChannel#doReadMessages方法，接受客户端请求并将原生客户端通道对象封装为Netty的NioSocketChannel实例后做为消息返回...");
+
+        // 接受客户端请求，创建了一个Java原生SocketChannel通道，后面此通道负责和客户端进行I/O交互
         SocketChannel ch = SocketUtils.accept(javaChannel());
 
-        // 将客户端请求封装为NioSocketChannel实例，然后添加到中缓冲消息集合里面
+        // 将客户端请求封装为NioSocketChannel实例，然后添加到缓冲消息列表，即作为消息传递给pipeline中的处理器
         try {
             if (ch != null) {
                 buf.add(new NioSocketChannel(this, ch));

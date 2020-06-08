@@ -18,6 +18,9 @@ package io.netty.channel;
 import io.netty.util.concurrent.EventExecutorGroup;
 
 /**
+ * EventLoopGroup，事件循环组
+ * 特殊的事件执行器组{@link EventExecutorGroup}，它允许注册通道{@link Channel}以便处理接下来事件循环/事件轮询过程中的选择。
+ *
  * Special {@link EventExecutorGroup} which allows registering {@link Channel}s that get
  * processed for later selection during the event loop.
  *

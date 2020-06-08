@@ -43,6 +43,12 @@ public abstract class AbstractScheduledEventExecutor extends AbstractEventExecut
        public void run() { } // Do nothing
     };
 
+    /**
+     * 调度任务队列
+     *
+     * 比如在连接远程主机时，可能连接没有立即返回成功与否的状态，
+     * 则将创建提交一个调度任务加入到调度任务队列scheduledTaskQueue中，然后加入事件轮询，以继续监听成功与否
+     */
     PriorityQueue<ScheduledFutureTask<?>> scheduledTaskQueue;
 
     long nextTaskId;
@@ -168,6 +174,8 @@ public abstract class AbstractScheduledEventExecutor extends AbstractEventExecut
     /**
      * 执行调度任务：延迟delay个时间单位unit后，执行任务
      *
+     * 比如在连接远程主机时，可能连接没有立即返回成功与否的状态，则将创建提交一个调度任务加入到调度任务队列scheduledTaskQueue中
+     *
      * @param command 任务
      * @param delay 延迟时间
      * @param unit
@@ -259,7 +267,7 @@ public abstract class AbstractScheduledEventExecutor extends AbstractEventExecut
     }
 
     /**
-     * 当前线程中执行调度任务
+     * 提交一个任务到调度任务队列中
      *
      * @param task
      */
@@ -277,7 +285,7 @@ public abstract class AbstractScheduledEventExecutor extends AbstractEventExecut
      */
     private <V> ScheduledFuture<V> schedule(final ScheduledFutureTask<V> task) {
         if (inEventLoop()) {
-            // 当前线程执行：主要时将任务添加到任务队列中
+            // 如果时相同线程，加入到调度任务队列中，等当前线程执行
             scheduleFromEventLoop(task);
         } else {
             final long deadlineNanos = task.deadlineNanos();

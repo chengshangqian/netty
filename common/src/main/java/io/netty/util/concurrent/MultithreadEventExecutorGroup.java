@@ -15,6 +15,9 @@
  */
 package io.netty.util.concurrent;
 
+import io.netty.util.internal.logging.InternalLogger;
+import io.netty.util.internal.logging.InternalLoggerFactory;
+
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
@@ -33,6 +36,10 @@ import java.util.concurrent.atomic.AtomicInteger;
  * the same time.
  */
 public abstract class MultithreadEventExecutorGroup extends AbstractEventExecutorGroup {
+    /**
+     * 内部日志
+     */
+    private static final InternalLogger logger = InternalLoggerFactory.getInstance(MultithreadEventExecutorGroup.class);
 
     /**
      * 子(线程）事件执行器数组：相当于一个线程池，EventExecutor也是EventLoop实例
@@ -107,11 +114,13 @@ public abstract class MultithreadEventExecutorGroup extends AbstractEventExecuto
         if (executor == null) {
             // 使用缺省线程工厂创建线程任务执行器（每个任务一个线程的线程执行器），每次执行execute方法，将由内部的线程工厂创建一个新的线程执行任务
             executor = new ThreadPerTaskExecutor(newDefaultThreadFactory());
+            logger.info("创建线程任务执行器executor...");
         }
 
         /*===> 2.创建子（线程）事件执行器，EventExecutor也即EventLoop **********************************************/
         // 初始化子（线程）事件执行器数组，元素个数等于子线程数，每个子线程分配一个任务执行器，children数组相当于一个线程池
         children = new EventExecutor[nThreads];
+        logger.info("创建事件执行器数组children，将初始化{}个事件执行器/事件循环NioEventLop...",nThreads);
 
         // 创建子(线程)事件执行器，填充子(线程)事件执行器数组
         for (int i = 0; i < nThreads; i ++) {
@@ -157,6 +166,7 @@ public abstract class MultithreadEventExecutorGroup extends AbstractEventExecuto
 
         /*===> 3.初始化子（线程）事件执行器的选择器 ******************************************/
         // 使用事件执行器选择器工厂为子事件执行器创建选择器：后续由一个客户端请求进来时，将选择其中一个子事件执行器创建线程以及绑定/注册对应的Channel和Selector等
+        logger.info("创建事件执行器选择器chooser...");
         chooser = chooserFactory.newChooser(children);
 
         /*===> 4.创建和绑定子（线程）事件执行器的终止/完成执行任务的监听器 ***************************/
@@ -195,7 +205,7 @@ public abstract class MultithreadEventExecutorGroup extends AbstractEventExecuto
      * @return 缺省的线程工厂对象
      */
     protected ThreadFactory newDefaultThreadFactory() {
-        // 为当前类型创建一个缺省的线程工厂，内部线程组或线程池中可持有最多5个线程
+        // 为当前类型创建一个缺省的线程工厂(内部线程组或线程池中可持有最多5个线程?)
         return new DefaultThreadFactory(getClass());
     }
 

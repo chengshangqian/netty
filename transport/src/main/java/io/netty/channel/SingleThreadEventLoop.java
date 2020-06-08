@@ -73,9 +73,9 @@ public abstract class SingleThreadEventLoop extends SingleThreadEventExecutor im
      *
      * @param parent
      * @param executor
-     * @param addTaskWakesUp
-     * @param taskQueue
-     * @param tailTaskQueue
+     * @param addTaskWakesUp 添加任务唤醒
+     * @param taskQueue 任务队列
+     * @param tailTaskQueue 尾部任务队列
      * @param rejectedExecutionHandler
      */
     protected SingleThreadEventLoop(EventLoopGroup parent, Executor executor,

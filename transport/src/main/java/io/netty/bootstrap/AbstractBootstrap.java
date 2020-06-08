@@ -33,6 +33,7 @@ import io.netty.util.internal.ObjectUtil;
 import io.netty.util.internal.SocketUtils;
 import io.netty.util.internal.StringUtil;
 import io.netty.util.internal.logging.InternalLogger;
+import io.netty.util.internal.logging.InternalLoggerFactory;
 
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -44,6 +45,12 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
+ * AbstractBootstrap，抽象引导
+ * 它是一个帮助者类即辅助类，使引导一个通道Channel变的容易。它通过支持链式方法调用来提供一个简单的方式去配置抽象引导类。
+ * 当不在一个服务器引导上下文中使用时，对于无连接传输比如数据报（UDP），bind()系列方法会非常有用
+ *
+ * support 支持;拥护;鼓励;帮助;援助;资助;赞助
+ *
  * {@link AbstractBootstrap} is a helper class that makes it easy to bootstrap a {@link Channel}. It support
  * method-chaining to provide an easy way to configure the {@link AbstractBootstrap}.
  *
@@ -51,6 +58,11 @@ import java.util.concurrent.ConcurrentHashMap;
  * transports such as datagram (UDP).</p>
  */
 public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C extends Channel> implements Cloneable {
+    /**
+     * 内部日志
+     */
+    private static final InternalLogger logger = InternalLoggerFactory.getInstance(AbstractBootstrap.class);
+
     @SuppressWarnings("unchecked")
     static final Map.Entry<ChannelOption<?>, Object>[] EMPTY_OPTION_ARRAY = new Map.Entry[0];
     @SuppressWarnings("unchecked")
@@ -123,6 +135,7 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
      */
     public B channel(Class<? extends C> channelClass) {
         // 使用指定的通道类型创建一个对应的通道工厂：该工厂使用指定通道类型的无参构造函数反射创建通道对象
+        logger.info("设置server接受器事件循环组acceptorGroup的通道类型{}...",channelClass.getSimpleName());
         return channelFactory(new ReflectiveChannelFactory<C>(
                 ObjectUtil.checkNotNull(channelClass, "channelClass")
         ));
@@ -320,6 +333,8 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
             throw new IllegalStateException("localAddress not set");
         }
 
+        logger.info("开始绑定本地主机地址...");
+
         // 指定本地套接字接口，创建通道并绑定
         return doBind(localAddress);
     }
@@ -360,18 +375,20 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
         // 验证参数
         validate();
 
+        logger.info("开始绑定本地主机地址...");
         // 指定本地主机套接字接口，创建通道并绑定
         return doBind(ObjectUtil.checkNotNull(localAddress, "localAddress"));
     }
 
     /**
-     * 指定本地主机套接字接口，创建通道并绑定
+     * 绑定指定的本地主机套接字地址
+     * 创建并初始化服务器套接字通道，然后将其注册到一个事件循环EventLoop中，并开始监听OP_ACCEPT事件，等待客户端连接
      *
-     * @param localAddress 本地主机套接字接口
-     * @return
+     * @param localAddress 本地主机套接字地址
+     * @return 返回一个通道异步回调实例
      */
     private ChannelFuture doBind(final SocketAddress localAddress) {
-        // 初始化（创建channel，初始化其它参数）并（将channel）注册（到EventLoop）
+        // 创建并初始化通道channel，并将通道channel注册到EventLoop/EventExecutor关联的选择器Selector上
         final ChannelFuture regFuture = initAndRegister();
 
         // 获取创建的通道实例channel
@@ -447,16 +464,21 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
      * @return 返回通道注册的异步回调对象ChannelFuture
      */
     final ChannelFuture initAndRegister() {
-        // 声明channel对象：客户端Channel
+        // 声明channel变量
         Channel channel = null;
 
         // 创建通道channel并初始化引导AbstractBootstrap具体子类实例
         try {
             // 使用绑定了通道类型的通道工厂对象channelFactory创建对应通道类型的通道对象实例
+            logger.info("使用通道工厂创建通道...");
             channel = channelFactory.newChannel();
+            logger.info("channelFactory.newChannel()创建的通道状态：{}...",channel.isActive());
+            logger.info("通道创建完毕{}...",channel.getClass().getSimpleName());
 
             // 初始化引导对象AbstractBootstrap具体子类实例：客户端和服务端将开始有不同的实现
+            logger.info("开始初始化通道...");
             init(channel);
+            logger.info("结束初始化通道...");
         } catch (Throwable t) {
             // 创建通道或初始化引导实例出现异常
             // 如果channel创建成功（也有创建失败为null的可能如果newChannel崩溃比如套接字异常等引起，所以这里需要对channel进行非null判断）
@@ -477,8 +499,10 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
             return new DefaultChannelPromise(new FailedChannel(), GlobalEventExecutor.INSTANCE).setFailure(t);
         }
 
+        logger.info("开始注册通道...");
         // 将通道channel注册到EventLoopGroup中的EventLoop中关联的Selector上
         ChannelFuture regFuture = config().group().register(channel);
+        logger.info("结束注册通道...");
         // 如果(同步)注册失败，关闭通道
         if (regFuture.cause() != null) {
             // 如果通道channel已经注册，则调用channel的关闭方法close关闭通道，此方法会触发通道事件
@@ -546,13 +570,14 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
         // This method is invoked before channelRegistered() is triggered.  Give user handlers a chance to set up
         // the pipeline in its channelRegistered() implementation.
 
-        // 创建并执行绑定通道和本地主机的任务
+        // 创建并启动新线程执行绑定通道和本地主机端口的任务
         channel.eventLoop().execute(new Runnable() {
             @Override
             public void run() {
                 // 如果通道注册成功，则绑定本地主机和通道
                 if (regFuture.isSuccess()) {
                     // 绑定通道和本地主机地址，并监听绑定结果，如果绑定失败，将关闭此通道
+                    logger.info("调用channel.bind(localAddress, promise)方法...");
                     channel.bind(localAddress, promise).addListener(ChannelFutureListener.CLOSE_ON_FAILURE);
                 }
                 // 如果通道注册失败，不会进行通道绑定操作，直接认为通道绑定失败，

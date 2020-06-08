@@ -58,6 +58,12 @@ public abstract class AbstractEventExecutor extends AbstractExecutorService impl
         return this;
     }
 
+    /**
+     * 是否在同一个EventLoop即同一个线程中
+     * 总是在相同的线程中处理同一个通道的I/O事件
+     *
+     * @return
+     */
     @Override
     public boolean inEventLoop() {
         return inEventLoop(Thread.currentThread());
@@ -157,10 +163,13 @@ public abstract class AbstractEventExecutor extends AbstractExecutorService impl
     }
 
     /**
+     * 执行任务
+     *
      * Try to execute the given {@link Runnable} and just log if it throws a {@link Throwable}.
      */
     protected static void safeExecute(Runnable task) {
         try {
+            logger.info("在安全执行方法safeExecute中执行任务队列中的任务 {}...",task.toString());
             task.run();
         } catch (Throwable t) {
             logger.warn("A task raised an exception. Task: {}", task, t);

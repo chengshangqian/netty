@@ -24,6 +24,16 @@ import java.util.concurrent.TimeUnit;
 
 
 /**
+ * ChannelFuture，通道未来
+ *
+ * ChannelFuture是异步通道I/O操作的结果。
+ * Netty里所有的I/O操作都是异步的。这意味着任何I/O调用将立即返回，但不保证被请求的I/O操作在调用结束时已经完成。
+ * 相反，你将会被返回一个ChannelFuture实例，它会给你有关该I/O操作的结果或状态信息。
+ * 一个ChannelFuture要么是未完成要么是完成的。当一个I/O操作开始，一个新的通道味蕾future对象同时将被创建。
+ * 新的future对象初始化时是未完成的 - 它即不是成功，也不是失败，也不是取消，因为对应的I/O操作尚未完成(结束).
+ * 如果I/O操作要么成功完成，要么失败结束，或者被取消，此时future对象被标记为已完成，并带有更具体的信息，如故障原因。
+ * 请注意，即使是失败和取消都属于完成状态。
+ *
  * The result of an asynchronous {@link Channel} I/O operation.
  * <p>
  * All I/O operations in Netty are asynchronous.  It means any I/O calls will

@@ -314,11 +314,21 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
     @Override
     public ChannelFuture bind(SocketAddress localAddress, ChannelPromise promise) {
         // pipeline绑定本机地址
+        logger.info("调用pipeline.bind(localAddress, promise)方法...");
         return pipeline.bind(localAddress, promise);
     }
 
+    /**
+     * 连接远程主机
+     *
+     * @param remoteAddress
+     * @param promise
+     * @return
+     */
     @Override
     public ChannelFuture connect(SocketAddress remoteAddress, ChannelPromise promise) {
+        // pipeline连接远程主机
+        logger.info("调用pipeline.connect(remoteAddress, promise)方法...");
         return pipeline.connect(remoteAddress, promise);
     }
 
@@ -342,8 +352,14 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
         return pipeline.deregister(promise);
     }
 
+    /**
+     * 读取
+     *
+     * @return
+     */
     @Override
     public Channel read() {
+        logger.info("调用pipeline.read()...");
         pipeline.read();
         return this;
     }
@@ -521,7 +537,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
         }
 
         /**
-         * 将通道Channel关联EventLoop以及注册到EventLoop关联的Selector中
+         * 将通道Channel关联EventLoop以及注册到EventLoop关联的Selector中，注册成功将同时开始监听可读事件
          *
          * @param eventLoop
          * @param promise
@@ -539,22 +555,28 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                 return;
             }
 
-            // 赋值当前实例的eventLoop
+            // 赋值当前实例的eventLoop，将channel和eventLoop关联起来
             AbstractChannel.this.eventLoop = eventLoop;
+
+            logger.info("当前线程与通道即将注册的事件执行器/事件循环绑定的线程是否同一个? {}",eventLoop.inEventLoop());
 
             // 如果当前线程和eventLoop中的线程在同一个线程中
             if (eventLoop.inEventLoop()) {
                 // 在当前线程执行注册
+                logger.info("将在当前线程中开始进行通道的注册...");
                 register0(promise);
             }
             else {
                 // 不在同一个线程，提交一个任务给线程池执行注册
                 try {
+                    logger.info("创建【注册任务】并提交给事件执行器/事件循环开启新线程（或使用其绑定的线程）执行...");
                     eventLoop.execute(new Runnable() {
                         @Override
                         public void run() {
                             // 执行注册
+                            logger.info("开始在事件执行器/事件循环开启的新线程（或使用其绑定的线程）执行【注册任务】...");
                             register0(promise);
+                            logger.info("结束在事件执行器/事件循环开启的新线程（或使用其绑定的线程）执行【注册任务】...");
                         }
                     });
                 } catch (Throwable t) {
@@ -569,7 +591,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
         }
 
         /**
-         * 执行通道注册任务
+         * 执行通道注册任务：注册成功将先后触发handlerAdded，ChannelRegistered，ChannelActive事件，同时开始监听可读事件
          *
          * 注册完成，将触发通道已注册事件channelRegistered，已经添加到pipeline且监听注册事件的处理器将会被调用，
          * 比如{@link ChannelInitializer}子类或匿名子类，此时将会触发{@link ChannelInitializer#channelRegistered(ChannelHandlerContext)}方法，
@@ -578,6 +600,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
          * @param promise
          */
         private void register0(ChannelPromise promise) {
+            logger.info("开始注册通道...");
             try {
                 // check if the channel is still open as it could be closed in the mean time when the register
                 // call was outside of the eventLoop
@@ -586,9 +609,10 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                 }
                 boolean firstRegistration = neverRegistered;
 
-                logger.debug("================> 调用doRegister()...");
                 // 注册：将channel注册到selector中
+                logger.info("开始调用AbstractNioChannel#doRegister()方法...");
                 doRegister();
+                logger.info("结束调用AbstractNioChannel#doRegister()方法...");
 
                 neverRegistered = false;
                 registered = true;
@@ -598,33 +622,42 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                 // Ensure we call handlerAdded(...) before we actually notify the promise. This is needed as the
                 // user may already fire events through the pipeline in the ChannelFutureListener.
                 // 触发handlerAdded事件，调用初始化器/处理器的handlerAdded方法，确所有业务逻辑处理器添加到pipeline中
-                logger.debug("================> 调用pipeline.invokeHandlerAddedIfNeeded()...");
+                logger.info("调用pipeline#invokeHandlerAddedIfNeeded()方法，执行前面步骤为通道添加初始化器/处理器的任务和触发handlerAdded事件...");
                 pipeline.invokeHandlerAddedIfNeeded();
 
-                logger.debug("================> 调用safeSetSuccess(promise)...");
                 safeSetSuccess(promise);
 
                 // 触发注册成功事件
                 // 在上面的pipeline.invokeHandlerAddedIfNeeded()方法中，部分通道处理器上下文会被移除，所以不会被触发
-                logger.debug("================> 调用pipeline.fireChannelRegistered()...");
+                logger.info("调用pipeline#fireChannelRegistered()方法，触发channelRegistered事件...");
                 pipeline.fireChannelRegistered();
 
                 // 只触发通道激活事件channelActive，如果通道channel还没被注册的话。如果通道被取消注册或重新注册，这样可以防止触发多个通道的激活事件。
                 // 即这样做，可以避免在通道取消注册或重新注册时造成多个通道（重复）激活。
                 // Only fire a channelActive if the channel has never been registered. This prevents firing
                 // multiple channel actives if the channel is deregistered and re-registered.
-                logger.debug("================> 调用isActive()...");
+
+                logger.info("当前通道是否已激活/绑定? {},config().isAutoRead() -> {}",isActive(),config().isAutoRead());
+
+                // 使用通道工厂channelFactory.newChannel()创建的通道，其状态是未激活的，
+                // 这种通道的激活事件和注册感兴趣事件动作会在bind或connect成功后触发
                 if (isActive()) {
+
+                    // 通道虽然已经激活，但是首次注册，依然触发一次channelActive事件
                     if (firstRegistration) {
-                        // 首次触发激活事件
-                        logger.debug("================> 调用pipeline.fireChannelActive()...");
+                        // 比如服务端接受客户端请求后创建的客户端通道NioSocketChannel，其状态是激活的，但其并未触发过激活事件，所以需要触发一次
+                        logger.info("调用pipeline#fireChannelActive()方法，触发channelActive事件...");
                         pipeline.fireChannelActive();
-                    } else if (config().isAutoRead()) {
+                        // head上下文触发完激活事件后，会调用beginRead()，将通道上感兴趣的事件进行注册
+                    }
+
+                    // 这种通道是设置为autoRead之前注册的
+                    else if (config().isAutoRead()) {
                         // This channel was registered before and autoRead() is set. This means we need to begin read
                         // again so that we process inbound data.
                         //
                         // See https://github.com/netty/netty/issues/4805
-                        logger.debug("================> 调用beginRead()监听可读事件...");
+                        logger.info("调用beginRead方法，当前通道类型{}...",promise.channel().getClass().getName());
                         beginRead();
                     }
                 }
@@ -634,6 +667,8 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                 closeFuture.setClosed();
                 safeSetFailure(promise, t);
             }
+
+            logger.info("结束注册通道...");
         }
 
         /**
@@ -663,8 +698,10 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                         "address (" + localAddress + ") anyway as requested.");
             }
 
+            // 通道是否已激活（即已经open && bound）
             boolean wasActive = isActive();
             try {
+                logger.info("开始调用Nio原生API将本地主机地址和当前的通道进行绑定... ");
                 doBind(localAddress);
             } catch (Throwable t) {
                 safeSetFailure(promise, t);
@@ -672,12 +709,17 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                 return;
             }
 
-            // 绑定成功,触发channelActive事件
+            logger.info("结束调用Nio原生API将本地主机地址和当前的通道进行绑定，通道绑定前后激活状态 : {} - {} ",wasActive,isActive());
+
+            // 绑定成功,触发channelActive事件，触发过程中，在pipeline中的头节点将会注册监听OP_READ可读事件
+            // 服务器端接受请求而创建的通道会执行进去吗？
             if (!wasActive && isActive()) {
                 // 创建一个稍后调用的任务
+                logger.info("创建和提交稍后执行的任务【触发channelActive事件】...");
                 invokeLater(new Runnable() {
                     @Override
                     public void run() {
+                        logger.info("触发channelActive事件...");
                         pipeline.fireChannelActive();
                     }
                 });
@@ -952,7 +994,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
         }
 
         /**
-         * 监听可读事件
+         * 开始从网络中读取信息（准备接收信息的状态，并不是有数据可以读取）
          */
         @Override
         public final void beginRead() {
@@ -964,6 +1006,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
 
             try {
                 // 监听可读事件
+                logger.info("调用doBeginRead()方法，准备注册通道感兴趣的OP_ACCEPT|OP_READ事件 ...");
                 doBeginRead();
             } catch (final Exception e) {
                 // 发生异常，触发异常事件
@@ -1127,6 +1170,11 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
             close(voidPromise());
         }
 
+        /**
+         * 稍后调用的任务
+         *
+         * @param task
+         */
         private void invokeLater(Runnable task) {
             try {
                 // This method is used by outbound operation implementations to trigger an inbound event later.

@@ -40,11 +40,20 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 /**
+ * ServerBootstrap，服务器引导
+ * 引导Bootstrap的子类，它允许服务器通道ServerChannel的简单引导，即通过ServerBootstrap可以很容易创建一个ServerChannel。
+ *
+ * allow 允许;准许;给予;允许进入(或出去、通过)
+ * bootstrap 独自创立;靠一己之力做成;附属于;与…相联系
+ *
  * {@link Bootstrap} sub-class which allows easy bootstrap of {@link ServerChannel}
  *
  */
 public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerChannel> {
 
+    /**
+     * 内部日志
+     */
     private static final InternalLogger logger = InternalLoggerFactory.getInstance(ServerBootstrap.class);
 
     // The order in which child ChannelOptions are applied is important they may depend on each other for validation
@@ -55,7 +64,9 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
     private volatile EventLoopGroup childGroup;
     private volatile ChannelHandler childHandler;
 
-    public ServerBootstrap() { }
+    public ServerBootstrap() {
+        logger.info("创建服务器引导实例server...");
+    }
 
     private ServerBootstrap(ServerBootstrap bootstrap) {
         super(bootstrap);
@@ -68,6 +79,8 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
     }
 
     /**
+     * 指定父（接收器）和子（客户端）的实践循环组{@link EventLoopGroup}
+     *
      * Specify the {@link EventLoopGroup} which is used for the parent (acceptor) and the child (client).
      */
     @Override
@@ -76,6 +89,9 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
     }
 
     /**
+     * 分别指定父（接受器）和子（客户端）的实践循环组{@link EventLoopGroup}。
+     * 两个事件循环组用来处理{@link ServerChannel}服务器通道和{@link Channel}通道上所有的事件和IO.
+     *
      * Set the {@link EventLoopGroup} for the parent (acceptor) and the child (client). These
      * {@link EventLoopGroup}'s are used to handle all the events and IO for {@link ServerChannel} and
      * {@link Channel}'s.
@@ -86,6 +102,7 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
             throw new IllegalStateException("childGroup set already");
         }
         this.childGroup = ObjectUtil.checkNotNull(childGroup, "childGroup");
+        logger.info("设置server的接受器事件循环组acceptorGroup和客户端事件循环组clientGroup参数...");
         return this;
     }
 
@@ -125,17 +142,19 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
      */
     public ServerBootstrap childHandler(ChannelHandler childHandler) {
         this.childHandler = ObjectUtil.checkNotNull(childHandler, "childHandler");
+        logger.info("设置server的客户端通道处理器childHandler参数{}...",childHandler.getClass().getSimpleName());
         return this;
     }
 
     /**
-     * 初始化服务端通道
+     * 初始化服务端套接字通道
      *
-     * @param channel (主线程)通道
+     * @param channel 服务端套接字通道实例，比如NioServerSocketChannel实例
      */
     @Override
     void init(Channel channel) {
-        // 设置主线程通道选项和属性
+
+        // 设置通道选项和属性
         setChannelOptions(channel, newOptionsArray(), logger);
         setAttributes(channel, attrs0().entrySet().toArray(EMPTY_ATTRIBUTE_ARRAY));
 
@@ -154,34 +173,33 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
         // 子通道属性
         final Entry<AttributeKey<?>, Object>[] currentChildAttrs = childAttrs.entrySet().toArray(EMPTY_ATTRIBUTE_ARRAY);
 
-        // 添加处理器：此处将主处理器添加到器pipeline之外，还启动了一个新的线程添加子处理器
+        // 为服务端套接字通道管道pipeline添加通道初始化器，初始化器也是一个处理器
+        // 注意，目前为止，服务端套接字通道channel还未注册到事件循环(关联的选择器Selector)中，
+        // 这是首次将处理器添加到pipeline中，此时由于channel还未注册，将会创建一个PendingHandlerAddedTask任务，在接下来的注册通道过程中，该任务会被执行，
+        // 届时，下面代码中的pipeline.addLast(handler);中的handler才会添加到pipeline中
+        logger.info("开始为通道添加首个通道初始化器...");
         p.addLast(new ChannelInitializer<Channel>() {
             /**
-             * 初始化通道
-             * @param ch            the {@link Channel} which was registered. 被注册的通道{@link Channel}
+             * 服务端套接字通道
+             * @param ch 服务端套接字通道实例
              */
             @Override
             public void initChannel(final Channel ch) {
-                logger.debug("Channel => " + ch.getClass().getName());
-                logger.debug("NioServerSocketChannel => " + NioServerSocketChannel.class.getName());
-
+                // 获取通道管道pipeline
                 final ChannelPipeline pipeline = ch.pipeline();
 
-                // 将主线程处理器添加到pipeline中，一般不需要设置主线程的处理器，所以handler一般为null
+                // 将handler添加到pipeline中，一般不需要额外设置服务端套接字通道处理器，所以handler一般为null
                 ChannelHandler handler = config.handler();
                 if (handler != null) {
                     pipeline.addLast(handler);
                 }
 
-                logger.debug("主线程名称 => " + Thread.currentThread().getName());
-
-                // 新开启一个线程添加一个接收器Acceptor处理器，
+                // 新开启一个线程添加一个Acceptor处理器，
                 // 其用于将新连接的客户端通道，封装转发给工作线程，以让工作线程处理后续I/O交互
+                logger.info("创建并提交为服务端套接字通道添加serverBootstrapAcceptor处理器的任务...");
                 ch.eventLoop().execute(new Runnable() {
                     @Override
                     public void run() {
-                        logger.debug("添加工作线程处理器的线程名称 => " + Thread.currentThread().getName());
-
                         // 创建按一个接收器适配器实例
                         ServerBootstrapAcceptor serverBootstrapAcceptor = new ServerBootstrapAcceptor(
                                 ch, currentChildGroup, currentChildHandler, currentChildOptions, currentChildAttrs);
@@ -190,11 +208,15 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
                         // ServerBootstrapAcceptor处理器重载了channelRead方法，当主线程将ServerBootstrapAcceptor处理器添加到pipeline后，
                         // 主线程的通道发生可读事件时，就会触发channelRead方法的执行，此时即可通过ServerBootstrapAcceptor处理器初始化时绑定的相关工作线程通道的
                         // 各种参数，调用对应的事件循环/事件执行器开启线程来执行响应可读事件任务
+                        logger.info("开始为服务端套接字通道添加serverBootstrapAcceptor处理器...");
                         pipeline.addLast(serverBootstrapAcceptor);
+                        logger.info("结束为服务端套接字通道添加serverBootstrapAcceptor处理器...");
                     }
                 });
+                logger.info("完成创建并提交为服务端套接字通道添加serverBootstrapAcceptor处理器的任务...");
             }
         });
+        logger.info("结束为通道添加首个通道初始化器...");
     }
 
     @Override
@@ -259,22 +281,26 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
         }
 
         /**
-         * 监听可读事件：创建了子通道时触发？
+         * 监听可读事件
          *
          * 当客户端发送数据来到可读取时，触发此事件的执行
          *
          * @param ctx
-         * @param msg 子通道?
+         * @param msg
          */
         @Override
         @SuppressWarnings("unchecked")
         public void channelRead(ChannelHandlerContext ctx, Object msg) {
-            // 这是一个通道类型的
-            final Channel child = (Channel) msg;
-            logger.debug("子通道child => " + child.getClass().getName());
+            // 这个方法的功能，相当于AbstractBootstrap#initAndRegister()方法，就是初始化通道和注册
 
-            // 为子通道添加处理器
+            final Channel child = (Channel) msg;
+            logger.info("刚new出来的channel激活状态 => {}",child.isActive());
+            logger.info("ServerBootstrapAcceptor处理器channelRead方法被调用，开始初始化并注册客户通道{}...",child.getClass().getSimpleName());
+
+            logger.info("开始为客户端通道添加处理器childHandler...");
+            // 为子通道添加处理器：此时会真正把处理业务逻辑的处理器加如到pipeline中
             child.pipeline().addLast(childHandler);
+            logger.info("结束为客户端通道添加处理器childHandler...");
 
             // 为子通道添加通道选项和属性
             setChannelOptions(child, childOptions, logger);
@@ -282,8 +308,10 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
 
             try {
                 /**
-                 * 将子通道注册到子事件循环相关联的Selector选择器上
+                 * 将子通道注册到子事件循环相关联的Selector选择器上，
+                 * 子事件循环即执行器执行添加处理器等任务时，将开始监听所有感兴趣的事件，此时将触发可读四化建
                  */
+                logger.info("开始为客户端通道注册...");
                 childGroup.register(child).addListener(new ChannelFutureListener() {
                     @Override
                     public void operationComplete(ChannelFuture future) throws Exception {
@@ -292,9 +320,11 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
                         }
                     }
                 });
+                logger.info("结束为客户端通道注册...");
             } catch (Throwable t) {
                 forceClose(child, t);
             }
+            logger.info("结束初始化并注册客户通道...");
         }
 
         private static void forceClose(Channel child, Throwable t) {

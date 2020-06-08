@@ -106,7 +106,10 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
         this.name = ObjectUtil.checkNotNull(name, "name");
         this.pipeline = pipeline;
         this.executor = executor;
+
+        // 计算执行掩码
         this.executionMask = mask(handlerClass);
+
         // Its ordered if its driven by the EventLoop or the given Executor is an instanceof OrderedEventExecutor.
         ordered = executor == null || executor instanceof OrderedEventExecutor;
     }
@@ -126,6 +129,10 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
         return channel().config().getAllocator();
     }
 
+    /**
+     * 当前通道绑定的事件循环
+     * @return
+     */
     @Override
     public EventExecutor executor() {
         if (executor == null) {
@@ -223,8 +230,14 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
         return this;
     }
 
+    /**
+     * 调用下一个上下文（中的处理器）的ChannelActive方法
+     *
+     * @param next pipeline中的下一个上下文
+     */
     static void invokeChannelActive(final AbstractChannelHandlerContext next) {
         EventExecutor executor = next.executor();
+        logger.info("executor.inEventLoop()? {} ...",executor.inEventLoop());
         if (executor.inEventLoop()) {
             next.invokeChannelActive();
         } else {
@@ -237,9 +250,14 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
         }
     }
 
+    /**
+     * 调用处理器的channelActive方法
+     */
     private void invokeChannelActive() {
+        // 确保处理器已添加到当前的pipeline中，否则触发下一个上下文的channelActive方法
         if (invokeHandler()) {
             try {
+                logger.info("handler()? {} ...",handler().getClass().getSimpleName());
                 ((ChannelInboundHandler) handler()).channelActive(this);
             } catch (Throwable t) {
                 invokeExceptionCaught(t);
@@ -506,9 +524,14 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
             return promise;
         }
 
-        // 从头部开始，执行绑定任务，从而触发绑定事件，从pipeline中的第1个上下文开始触发
+        // 从当前位置找到下一个封装的出站处理器中有bind方法的上下文
+        // 从当前上下文开始，在当前所在的pipeline中，往双向链表的头部head方向开始找，
+        // 如果过程中没有符合条件的，最终会找到head上下文
+        // MASK_BIND掩码代表bind方法
+        // 执行绑定任务，会触发绑定事件
         final AbstractChannelHandlerContext next = findContextOutbound(MASK_BIND);
         EventExecutor executor = next.executor();
+        logger.info("将在当前线程或新开线程执行【绑定任务】? {}...",executor.inEventLoop());
         if (executor.inEventLoop()) {
             next.invokeBind(localAddress, promise);
         } else {
@@ -529,17 +552,20 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
      * @param promise
      */
     private void invokeBind(SocketAddress localAddress, ChannelPromise promise) {
+        // 如果上下文封装的处理器或本身已经添加到当前的pipeline上（双向链表上），则调用其bind方法绑定本地主机地址
         if (invokeHandler()) {
             try {
                 // 绑定通道出站处理器
-                // 演示的服务端程序中没有设置主线程的handler，所以在已serverSocketChannel已经注册情况下，
-                // 服务端目前只绑定了一个处理器：ServerBootstrapAcceptor处理器（见{@link ServerBootstrap#init(Channel channel)}方法)
-               logger.debug("handler() => " + handler().getClass().getName());
+                // 演示的服务端程序中没有额外设置主线程的handler，所以此时,
+                // 只有io.netty.channel.DefaultChannelPipeline$HeadContext
+               logger.info("准备调用上下文中的出站处理器{}绑定本地主机地址... ",handler().getClass().getName());
                 ((ChannelOutboundHandler) handler()).bind(this, localAddress, promise);
             } catch (Throwable t) {
                 notifyOutboundHandlerException(t, promise);
             }
-        } else {
+        }
+        // 如果没有添加到当前的pipeline，则继续寻找下一个上下文进行绑定
+        else {
             bind(localAddress, promise);
         }
     }
@@ -575,7 +601,8 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
         }
 
         /**
-         * 通道管道中的下一个上下文
+         * 从通道管道pipeline中找到下一个实现了连接connect方法的出站上下文
+         * 从当前上下文往头部head找，如果过程中没有找到，最终将找到head上下文
          */
         final AbstractChannelHandlerContext next = findContextOutbound(MASK_CONNECT);
 
@@ -607,15 +634,15 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
      */
     private void invokeConnect(SocketAddress remoteAddress, SocketAddress localAddress, ChannelPromise promise) {
 
-        // 检测设置的处理器handler是否需要添加到通道管道pipeline中
+        // 检查当前上下文的处理器（出站处理器）是否已经添加到当前的pipeline中（不在pipeline中，不应触发对应的事件）
         if (invokeHandler()) {
-            // 如果还没有添加到pipeline中，则连接前需要将管道处理器添加到pipeline中
             try {
                 ((ChannelOutboundHandler) handler()).connect(this, remoteAddress, localAddress, promise);
             } catch (Throwable t) {
                 notifyOutboundHandlerException(t, promise);
             }
         } else {
+            //  如果还没有添加到pipeline中，则寻找下一个出站上下文，触发其连接方法（事件）
             connect(remoteAddress, localAddress, promise);
         }
     }
@@ -729,10 +756,16 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
         }
     }
 
+    /**
+     * 设置读取
+     *
+     * @return
+     */
     @Override
     public ChannelHandlerContext read() {
         final AbstractChannelHandlerContext next = findContextOutbound(MASK_READ);
         EventExecutor executor = next.executor();
+        logger.info("调用next.invokeRead()方法，executor.inEventLoop()? {} ...",executor.inEventLoop());
         if (executor.inEventLoop()) {
             next.invokeRead();
         } else {
@@ -746,9 +779,13 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
         return this;
     }
 
+    /**
+     * 设置读取事件
+     */
     private void invokeRead() {
         if (invokeHandler()) {
             try {
+                logger.info("调用handler().read()方法，注册通道感兴趣的OP_ACCEPT|OP_READ事件 {} ...",handler().getClass().getSimpleName());
                 ((ChannelOutboundHandler) handler()).read(this);
             } catch (Throwable t) {
                 invokeExceptionCaught(t);
@@ -834,6 +871,13 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
         }
     }
 
+    /**
+     * 将小写写入缓冲区/通道
+     *
+     * @param msg
+     * @param flush
+     * @param promise
+     */
     private void write(Object msg, boolean flush, ChannelPromise promise) {
         ObjectUtil.checkNotNull(msg, "msg");
         try {
@@ -847,9 +891,14 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
             throw e;
         }
 
+        // 找到下一个（封装了出站处理器）的出站上下文：
+        // 在链表中则是往头部head方向找，运行符合的处理器的对应方法后继续下一个，最后直到head节点
+        // head节点对应的write方法（其重载了当前方法，即不会再调用此方法遍历下一个上下文），其write方法将直接把数据写入缓冲
         final AbstractChannelHandlerContext next = findContextOutbound(flush ?
                 (MASK_WRITE | MASK_FLUSH) : MASK_WRITE);
+
         final Object m = pipeline.touch(msg, next);
+
         EventExecutor executor = next.executor();
         if (executor.inEventLoop()) {
             if (flush) {
@@ -939,33 +988,66 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
         return false;
     }
 
+    /**
+     * 找到下一个（封装了入站处理器）的入站上下文
+     *
+     * @param mask 执行掩码
+     * @return
+     */
     private AbstractChannelHandlerContext findContextInbound(int mask) {
         AbstractChannelHandlerContext ctx = this;
         EventExecutor currentExecutor = executor();
+
+        // 从当前上下文往双向链表中的下一个查找：往尾部tail方向找，中间如果没有符合条件的入站上下文，最终将会找到tail尾节点?
         do {
             ctx = ctx.next;
         } while (skipContext(ctx, currentExecutor, mask, MASK_ONLY_INBOUND));
+
         return ctx;
     }
 
     /**
-     * 找到头部
+     * 找到下一个（封装了出站处理器）的出站上下文
+     * 从当前上下文位置往链表头方向查找指定掩码的出站上下文
+     * Netty使用掩码对应处理器中的方法，即特定的掩码对应特定的方法，用来快速检查处理器中是否有对应的方法存在，
+     * 可以利用此方式查找需要或排除包含特定方法的对应处理器或上下文。比如在触发事件时，可以选择跳过调用重载了该方法的父类方法
+     * 掩码和方法的对应关系即定义参考{@link ChannelHandlerMask},通过器方法mask或mask0等方法了解过程应用的原理
      *
      * @param mask
      * @return
      */
     private AbstractChannelHandlerContext findContextOutbound(int mask) {
+        // 当前上下文
         AbstractChannelHandlerContext ctx = this;
+
+        // 当前上下文当对应通道绑定的事件循环/事件执行器
         EventExecutor currentExecutor = executor();
+
+        // 从当前上下文往双向链表中的上一个查找：往头部head方向找,中间如果没有符合条件的出站上下文，最终将会找到head尾节点
         do {
             ctx = ctx.prev;
         } while (skipContext(ctx, currentExecutor, mask, MASK_ONLY_OUTBOUND));
+
+        logger.info("查找出站上下文节点 next => {} ...",ctx.getClass().getSimpleName());
+
         return ctx;
     }
 
+    /**
+     * 跳过上下文
+     *
+     * @param ctx 上下文
+     * @param currentExecutor 当前执行器
+     * @param mask 掩码
+     * @param onlyMask 可以匹配的掩码（范围）
+     * @return
+     */
     private static boolean skipContext(
             AbstractChannelHandlerContext ctx, EventExecutor currentExecutor, int mask, int onlyMask) {
         // Ensure we correctly handle MASK_EXCEPTION_CAUGHT which is not included in the MASK_EXCEPTION_CAUGHT
+
+        // 1.如果(mask和onlyMask的合)与给定上下文执行掩码位与为0，说明当前上下文掩码【不在】(mask和onlyMask的合)中
+        // 2.给定上下文事件执行器时吻合的，但但给定的上下文执行掩码没法精确匹配给定的掩码
         return (ctx.executionMask & (onlyMask | mask)) == 0 ||
                 // We can only skip if the EventExecutor is the same as otherwise we need to ensure we offload
                 // everything to preserve ordering.
@@ -1015,7 +1097,7 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
         // We must call setAddComplete before calling handlerAdded. Otherwise if the handlerAdded method generates
         // any pipeline events ctx.handler() will miss them because the state will not allow it.
         if (setAddComplete()) {
-            logger.debug("================> 触发handlerAdded事件:::" + handler().getClass().getName());
+            logger.debug("触发handlerAdded事件:::" + handler().getClass().getName());
             handler().handlerAdded(this);
         }
     }
@@ -1033,6 +1115,8 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
     }
 
     /**
+     * 是否处理器已经添加到当前的pipeline中
+     *
      * 尽最大努力尝试检测{@link ChannelHandler#handlerAdded(ChannelHandlerContext)}方法是否已经被调用。
      * 如果不返回{@code false}以及如果被调用或无法检测到返回{@code true}.
      *

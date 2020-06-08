@@ -30,6 +30,8 @@ import io.netty.channel.socket.ChannelInputShutdownEvent;
 import io.netty.channel.socket.ChannelInputShutdownReadComplete;
 import io.netty.channel.socket.SocketChannelConfig;
 import io.netty.util.internal.StringUtil;
+import io.netty.util.internal.logging.InternalLogger;
+import io.netty.util.internal.logging.InternalLoggerFactory;
 
 import java.io.IOException;
 import java.nio.channels.SelectableChannel;
@@ -55,6 +57,11 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
         }
     };
     private boolean inputClosedSeenErrorOnRead;
+
+    /**
+     * 内部日志
+     */
+    private static final InternalLogger logger = InternalLoggerFactory.getInstance(AbstractNioByteChannel.class);
 
     /**
      * 根据给定的父通道{@link Channel}和可选择通道{@link SelectableChannel}创建一个新的AbstractNioByteChannel实例
@@ -112,18 +119,33 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
             }
         }
 
+        /**
+         * 处理通道读取异常
+         *
+         * @param pipeline
+         * @param byteBuf
+         * @param cause
+         * @param close
+         * @param allocHandle
+         */
         private void handleReadException(ChannelPipeline pipeline, ByteBuf byteBuf, Throwable cause, boolean close,
                 RecvByteBufAllocator.Handle allocHandle) {
             if (byteBuf != null) {
                 if (byteBuf.isReadable()) {
                     readPending = false;
+                    // 再次尝试触发读取事件
                     pipeline.fireChannelRead(byteBuf);
                 } else {
+                    // 释放字节缓冲
                     byteBuf.release();
                 }
             }
             allocHandle.readComplete();
+
+            // 触发读取完成事件：发生异常也回先完成或结束本次读取
             pipeline.fireChannelReadComplete();
+
+            // 触发异常事件
             pipeline.fireExceptionCaught(cause);
             if (close || cause instanceof IOException) {
                 closeOnRead(pipeline);
@@ -131,7 +153,7 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
         }
 
         /**
-         * 处理可读事件：读出通道中的数据(缓冲数据）
+         * 处理客户端通道可读事件：读出通道中的数据(缓冲数据）
          */
         @Override
         public final void read() {
@@ -140,6 +162,7 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
                 clearReadPending();
                 return;
             }
+
             final ChannelPipeline pipeline = pipeline();
             final ByteBufAllocator allocator = config.getAllocator();
             final RecvByteBufAllocator.Handle allocHandle = recvBufAllocHandle();
@@ -151,7 +174,9 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
                 do {
                     byteBuf = allocHandle.allocate(allocator);
 
-                    // 读取字节数据doReadBytes
+                    // 读取字节数据doReadBytes，调用子类模板方法，
+                    // 比如客户端连接远程主机服务器时所创建的NioSocketChannel实例，
+                    // 或服务端工作线程关联注册的（由服务端主线程NioServerSocketChannel创建的）NioSocketChannel实例
                     allocHandle.lastBytesRead(doReadBytes(byteBuf));
 
                     if (allocHandle.lastBytesRead() <= 0) {
@@ -169,20 +194,22 @@ public abstract class AbstractNioByteChannel extends AbstractNioChannel {
                     allocHandle.incMessagesRead(1);
                     readPending = false;
 
-                    // 触发读取事件
+                    // 触发通道读取事件
+                    logger.info("从通道管道pipeline头部处理器开始触发channelRead事件，将读取到的消息（字节缓冲数据）传递给childHandler处理器...");
                     pipeline.fireChannelRead(byteBuf);
 
                     byteBuf = null;
                 } while (allocHandle.continueReading());
 
                 allocHandle.readComplete();
-                // 触发读取完成事件
+                // 触发通道读取完成事件
                 pipeline.fireChannelReadComplete();
 
                 if (close) {
                     closeOnRead(pipeline);
                 }
             } catch (Throwable t) {
+                // 处理读取异常事件，触发异常事件
                 handleReadException(pipeline, byteBuf, t, close, allocHandle);
             } finally {
                 // Check if there is a readPending which was not processed yet.

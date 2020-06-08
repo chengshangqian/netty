@@ -22,6 +22,12 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
+ * EventExecutorGroup，事件执行器组
+ * 事件执行器组负责通过它的next()方法提供事件执行器供(调用者去)使用。
+ * 除此之外，它还负责处理事件执行器的生命周期，以及允许以一个全局的方式关闭它们（事件执行器）。
+ *
+ * responsible 有责任;负责;承担义务;应受责备;作为原因;成为起因
+ *
  * The {@link EventExecutorGroup} is responsible for providing the {@link EventExecutor}'s to use
  * via its {@link #next()} method. Besides this, it is also responsible for handling their
  * life-cycle and allows shutting them down in a global fashion.
