@@ -11,7 +11,7 @@
 
     <artifactId>learning</artifactId>
     <packaging>pom</packaging>
-    <version>${project.parent.version}</version>
+    <version>4.1.51.Final-SNAPSHOT</version>
 
     <modules>
         <module>netty4-core</module>
@@ -23,8 +23,8 @@
 
     <properties>
         <skipJapicmp>true</skipJapicmp>
-        <maven.compiler.source>1.8</maven.compiler.source>
-        <maven.compiler.target>1.8</maven.compiler.target>
+<!--        <maven.compiler.source>1.8</maven.compiler.source>-->
+<!--        <maven.compiler.target>1.8</maven.compiler.target>-->
     </properties>
 
     <dependencies>

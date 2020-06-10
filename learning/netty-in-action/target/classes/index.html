@@ -23,7 +23,7 @@
             log.append(msg + " \n").scrollTop(log[0].scrollHeight - log.height());
         }
         $(function () {
-            $('#url').val((location.protocol.indexOf('https') == -1 ? 'ws://' : 'wss://') + location.host + '/ws?id=jacky')
+            $('#url').val((location.protocol.indexOf('https') == -1 ? 'ws://' : 'wss://') + location.host + '/ws')
 
             if (!WebSocket) {
                 $('#not-supported').show()

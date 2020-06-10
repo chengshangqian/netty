@@ -11,8 +11,18 @@
     </parent>
 
     <artifactId>netty4-core</artifactId>
+    <packaging>jar</packaging>
 
     <dependencies>
+
+        <!--
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-all</artifactId>
+            <version>4.1.50.Final</version>
+        </dependency>
+        -->
+
         <dependency>
             <groupId>cglib</groupId>
             <artifactId>cglib</artifactId>
@@ -31,32 +41,94 @@
             <version>0.6.12</version>
         </dependency>
 
-        <dependency>
-            <groupId>org.projectlombok</groupId>
-            <artifactId>lombok</artifactId>
-            <version>1.18.8</version>
-        </dependency>
-
-        <dependency>
-            <groupId>com.alibaba</groupId>
-            <artifactId>fastjson</artifactId>
-            <version>1.2.7</version>
-        </dependency>
-
-        <!--
-        <dependency>
-            <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-log4j12</artifactId>
-            <version>1.7.30</version>
-        </dependency>
-        -->
+       <dependency>
+           <groupId>com.alibaba</groupId>
+           <artifactId>fastjson</artifactId>
+           <version>1.2.7</version>
+       </dependency>
 
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
             <version>1.7.9</version>
         </dependency>
+
     </dependencies>
 
+    <build>
+        <plugins>
+            <plugin>
+                <!-- ensure that only methods available in java 1.6 can
+                     be used even when compiling with java 1.7+ -->
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>animal-sniffer-maven-plugin</artifactId>
+                <version>1.16</version>
+                <configuration>
+                    <signature>
+                        <groupId>org.codehaus.mojo.signature</groupId>
+                        <artifactId>java16</artifactId>
+                        <version>1.1</version>
+                    </signature>
+                    <ignores>
+                        <ignore>java.nio.ByteBuffer</ignore>
+                        <ignore>java.nio.channels.AsynchronousChannelGroup</ignore>
+                        <ignore>java.nio.channels.AsynchronousServerSocketChannel</ignore>
+                        <ignore>java.nio.channels.AsynchronousSocketChannel</ignore>
+                    </ignores>
+                    <annotations>
+                        <annotation>io.netty.util.internal.SuppressJava6Requirement</annotation>
+                    </annotations>
+                </configuration>
+                <executions>
+                    <execution>
+                        <phase>process-classes</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
 
+            <!-- 把当前应用打包成jar|war|zip等 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-assembly-plugin</artifactId>
+                <version>2.6</version>
+                <configuration>
+                    <finalName>${project.artifactId}</finalName>
+                    <!-- 打包规则描述器 -->
+                    <descriptors>
+                        <descriptor>src/main/assembly/distribution.xml</descriptor>
+                    </descriptors>
+                    <!-- 指定jar包程序主入口 -->
+                    <!--
+                    <archive>
+                        <manifest>
+                            <mainClass>com.fandou.learning.netty.core.chapter15.server.SingleMillionServer</mainClass>
+                        </manifest>
+                    </archive>
+                    -->
+                </configuration>
+
+                <!-- 绑定到生命周期package阶段，执行single目标 -->
+                <executions>
+                    <execution>
+                        <id>make-assembly</id> <!-- this is used for inheritance merges -->
+                        <phase>package</phase>
+                        <goals>
+                            <goal>single</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <source>8</source>
+                    <target>8</target>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>

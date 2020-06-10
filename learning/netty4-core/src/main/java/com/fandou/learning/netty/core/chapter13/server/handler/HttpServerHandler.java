@@ -52,7 +52,7 @@ public class HttpServerHandler extends SimpleChannelInboundHandler<FullHttpReque
     /**
      * contentType映射
      */
-    private final Map<String,String> contentTypes = new HashMap<>();
+    private final Map<String,String> contentTypes = new HashMap<String,String>();
 
     /**
      * 获取资源文件

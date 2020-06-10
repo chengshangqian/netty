@@ -24,6 +24,8 @@ import java.lang.reflect.Constructor;
 /**
  * 反射型通道工厂ReflectiveChannelFactory
  *
+ * 对象工厂模式模式
+ *
  * A {@link ChannelFactory} that instantiates a new {@link Channel} by invoking its default constructor reflectively.
  */
 public class ReflectiveChannelFactory<T extends Channel> implements ChannelFactory<T> {
@@ -51,6 +53,7 @@ public class ReflectiveChannelFactory<T extends Channel> implements ChannelFacto
 
     /**
      * 创建通道实例
+     * 工厂方法
      *
      * @return
      */

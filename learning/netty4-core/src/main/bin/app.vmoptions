@@ -1,0 +1,8 @@
+-Xmn512m
+-Xms1024m
+-Xmx2048m
+-XX:PermSize=128m
+-XX:MaxPermSize=128m
+-XX:ReservedCodeCacheSize=64m
+-server
+-XX:-UseConcMarkSweepGC

@@ -51,7 +51,7 @@ public class FastThreadLocalSample {
     }
 
     public static void main(String[] args) {
-        FastThreadLocalSample holder = new FastThreadLocalSample();
+        final FastThreadLocalSample holder = new FastThreadLocalSample();
         System.out.println("主线程" + Thread.currentThread().getName() + "开始运行...");
 
         // 新开第一个线程，循环遍历，每次隔1秒设置runner中的对象

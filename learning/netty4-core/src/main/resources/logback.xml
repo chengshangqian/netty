@@ -71,6 +71,10 @@
         <appender-ref ref="DefaultFileAppender"/>
     </root>
 
+    <!-- 关闭某个包下的日志 level="OFF" -->
+    <logger name="io.netty" level="ERROR">
+    </logger>
+
     <logger name="PositionLogger" additivity="false">
         <level value="INFO"/>
         <appender-ref ref="PositionAppender"/>

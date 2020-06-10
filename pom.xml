@@ -841,6 +841,7 @@
         <configuration>
           <compilerVersion>1.8</compilerVersion>
           <fork>true</fork>
+          <encoding>UTF-8</encoding>
           <source>${maven.compiler.source}</source>
           <target>${maven.compiler.target}</target>
           <debug>true</debug>

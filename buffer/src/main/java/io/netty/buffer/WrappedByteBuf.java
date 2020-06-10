@@ -38,9 +38,17 @@ import java.nio.charset.Charset;
  * and {@link ByteBufUtil#writeUtf8(ByteBuf, CharSequence)}.
  */
 class WrappedByteBuf extends ByteBuf {
+    // WrappedByteBuf是装饰器模式，
+    // 被装饰者ByteBuf和装饰者即WrappedByteBuf都继承实现同一个接口，同宗同源
 
+    // 持有被装饰者
     protected final ByteBuf buf;
 
+    /**
+     * 构造方法中将被装饰者实例传递进来
+     *
+     * @param buf
+     */
     protected WrappedByteBuf(ByteBuf buf) {
         this.buf = ObjectUtil.checkNotNull(buf, "buf");
     }
